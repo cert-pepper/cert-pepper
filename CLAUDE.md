@@ -4,12 +4,27 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Repository Layout
 
-This repo has two distinct layers:
+```
+cert-pepper/
+├── cert_pepper/          — Python source (the app)
+│   ├── cli/              — Typer commands
+│   ├── mcp/              — Three FastMCP STDIO servers
+│   ├── engine/           — FSRS, BKT, selector, scorer (pure Python, no DB deps)
+│   ├── ingestion/        — Markdown parsers
+│   ├── ai/               — Anthropic client + explainer
+│   └── db/               — SQLAlchemy async engine + schema
+├── tests/                — pytest suite
+├── examples/
+│   └── security-plus/    — Security+ SY0-701 exam content (read-only input)
+├── docs/
+│   ├── walkthrough.md    — 10-day Security+ study guide
+│   └── content-format.md — Format spec for exam content
+├── pyproject.toml
+├── .env                  — Local config (not committed)
+└── .env.example          — Config template
+```
 
-1. **Study content (repo root)** — Markdown files for Security+ SY0-701 exam prep. These are the data source for the app.
-2. **cert-pepper app (`cert-pepper/`)** — Python application that ingests the markdown content into SQLite and provides an adaptive study interface.
-
-All development happens inside `cert-pepper/`. Study content (domains, flashcards, practice-questions, acronyms.md) is never modified by the app — it is read-only input.
+All development happens in `cert_pepper/` and `tests/`. Content under `examples/` is never modified by the app — it is read-only input.
 
 ## TDD Red-Green Workflow (Required)
 
@@ -21,11 +36,10 @@ All development happens inside `cert-pepper/`. Study content (domains, flashcard
 
 This is not optional. Do not write production code before writing the test that exercises it. Tests must be legitimate — they should fail if the implementation is wrong, not just be structural boilerplate.
 
-**Test file locations**: `cert-pepper/tests/`. Each module in `cert_pepper/` has a corresponding `test_<module>.py`.
+**Test file locations**: `tests/`. Each module in `cert_pepper/` has a corresponding `test_<module>.py`.
 
 **Running tests**:
 ```bash
-cd cert-pepper
 uv run pytest tests/test_fsrs.py -v              # single file
 uv run pytest tests/test_fsrs.py::TestClass::test_name  # single test (run this to verify red before implementing)
 uv run pytest                                     # full suite (must stay green)
@@ -37,13 +51,11 @@ uv run pytest                                     # full suite (must stay green)
 - Use `seed_question()`, `seed_attempt()`, `seed_session()`, `get_user_id()` from `conftest.py` to set up DB state.
 - AI/API functions: test only the pure helpers (`make_prompt_hash`, `get_explainer_system`). Do not call live APIs in tests.
 
-## cert-pepper: Common Commands
+## Common Commands
 
-All commands must be run from `cert-pepper/` with `uv`. The `.env` file there sets `DB_PATH` and `CONTENT_ROOT`.
+All commands run from the repo root with `uv`. The `.env` file sets `DB_PATH` and `CONTENT_ROOT`.
 
 ```bash
-cd cert-pepper
-
 # Install dependencies (first time or after pyproject.toml changes)
 uv sync
 
@@ -52,21 +64,21 @@ uv run cert-pepper --help
 
 # Database + ingestion (one-time setup)
 uv run cert-pepper db init
-uv run cert-pepper ingest           # parses markdown → SQLite
-uv run cert-pepper ingest --dry-run # parse only, no DB writes
+uv run cert-pepper ingest                           # parses examples/security-plus/ → SQLite
+uv run cert-pepper ingest --dry-run                 # parse only, no DB writes
 
 # Study
-uv run cert-pepper study            # adaptive, all domains
+uv run cert-pepper study                            # adaptive, all domains
 uv run cert-pepper study --domain 4 --count 15
-uv run cert-pepper progress         # dashboard: accuracy, predicted score, weak areas
-uv run cert-pepper exam             # 90-question timed mock exam
+uv run cert-pepper progress                         # dashboard: accuracy, predicted score, weak areas
+uv run cert-pepper exam                             # 90-question timed mock exam
 
 # AI explanations (requires ANTHROPIC_API_KEY in .env)
-uv run cert-pepper pregenerate      # batch-generate all explanations once
+uv run cert-pepper pregenerate                      # batch-generate all explanations once
 
 # Tests
-uv run pytest                       # all tests
-uv run pytest tests/test_fsrs.py    # single file
+uv run pytest                                       # all tests
+uv run pytest tests/test_fsrs.py                    # single file
 uv run pytest tests/test_fsrs.py::TestStateTransitions::test_new_card_again_enters_learning  # single test
 
 # Lint / type check
@@ -74,11 +86,11 @@ uv run ruff check cert_pepper/
 uv run mypy cert_pepper/
 ```
 
-## cert-pepper: Architecture
+## Architecture
 
 ### Data flow
 ```
-Markdown files (repo root)
+examples/security-plus/  (or CONTENT_ROOT)
     └─→ ingestion/ parsers
             └─→ SQLite (cert_pepper.db)
                     ├─→ CLI commands (Typer + Rich TUI)
@@ -117,10 +129,10 @@ FSRS card state is stored in `fsrs_cards` with an `ON CONFLICT DO UPDATE` upsert
 
 ### MCP integration
 
-The `.mcp.json` at the repo root registers all three servers with absolute paths to `uv` and the DB. When working on MCP servers, test them by running the module directly:
+The `.mcp.json` at the repo root registers all three servers. After `uv sync`, server binaries are at `.venv/bin/cert-pepper-*-mcp`. Test a server directly:
 
 ```bash
-echo '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | uv run python -m cert_pepper.mcp.study_engine
+echo '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | .venv/bin/cert-pepper-study-mcp
 ```
 
 ## Study Content Format
@@ -148,3 +160,5 @@ Explanation text.
 
 Flashcards: `**Term** → Definition | Memory tip` (tip is optional, separated by `|`).
 Acronyms: Markdown table rows `| ACRONYM | Full Term |` under `## Category` headers.
+
+Full format documentation: [docs/content-format.md](docs/content-format.md)
