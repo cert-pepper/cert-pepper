@@ -1,0 +1,26 @@
+# Claude Code local settings (machine-specific)
+.claude/settings.local.json
+.claude/projects/
+
+# Python / uv artifacts
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+dist/
+build/
+
+# Database files
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+
+# Environment / secrets
+.env
+*.env.local
+
+# OS
+.DS_Store
+Thumbs.db
