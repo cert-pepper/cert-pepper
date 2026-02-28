@@ -13,19 +13,11 @@ from cert_pepper.engine.scorer import predict_score, get_weak_areas, get_recomme
 
 console = Console()
 
-DOMAIN_NAMES = {
-    1: "General Security Concepts",
-    2: "Threats, Vulnerabilities & Mitigations",
-    3: "Security Architecture",
-    4: "Security Operations",
-    5: "Program Management & Oversight",
-}
 
-DOMAIN_WEIGHTS = {1: 12, 2: 22, 3: 18, 4: 28, 5: 20}
-
-
-async def show_dashboard() -> None:
+async def show_dashboard(exam_code: str | None = None) -> None:
     """Render the full progress dashboard."""
+    from cert_pepper.db.exams import resolve_cert_id
+
     async with get_session() as session:
         # Get default user
         result = await session.execute(text("SELECT id FROM users WHERE username='default' LIMIT 1"))
@@ -34,6 +26,30 @@ async def show_dashboard() -> None:
             console.print("[red]No user found. Run `cert-pepper db init` first.[/red]")
             return
         user_id = row[0]
+
+        # Resolve certification
+        try:
+            cert_id = await resolve_cert_id(session, exam_code)
+        except ValueError as e:
+            console.print(f"[red]{e}[/red]")
+            return
+
+        # Get cert info for subtitle
+        result = await session.execute(
+            text("SELECT code, name FROM certifications WHERE id = :cid"),
+            {"cid": cert_id},
+        )
+        cert_row = result.fetchone()
+        cert_label = f"{cert_row[0]} — {cert_row[1]}" if cert_row else "Unknown Exam"
+
+        # Get domain names/weights from DB
+        result = await session.execute(
+            text("SELECT number, name, weight_pct FROM domains WHERE certification_id = :cid ORDER BY number"),
+            {"cid": cert_id},
+        )
+        domain_rows = result.fetchall()
+        domain_names = {row[0]: row[1] for row in domain_rows}
+        domain_weights = {row[0]: int(row[2]) for row in domain_rows}
 
         # Get overall stats
         result = await session.execute(
@@ -47,7 +63,7 @@ async def show_dashboard() -> None:
         total_attempts = stats[0] or 0
         total_correct = stats[1] or 0
 
-        # Get domain breakdown
+        # Get domain breakdown (cert-scoped)
         result = await session.execute(
             text("""
                 SELECT d.number, COUNT(*) as total, SUM(qa.is_correct) as correct
@@ -55,17 +71,18 @@ async def show_dashboard() -> None:
                 JOIN questions q ON q.id = qa.question_id
                 JOIN domains d ON d.id = q.domain_id
                 WHERE qa.user_id = :uid
+                AND d.certification_id = :cert_id
                 GROUP BY d.number
                 ORDER BY d.number
             """),
-            {"uid": user_id},
+            {"uid": user_id, "cert_id": cert_id},
         )
         domain_stats = {row[0]: (row[1], row[2]) for row in result.fetchall()}
 
         # Get predicted score
-        score = await predict_score(session, user_id)
-        weak_areas = await get_weak_areas(session, user_id)
-        recommendations = await get_recommendations(session, user_id)
+        score = await predict_score(session, user_id, cert_id=cert_id)
+        weak_areas = await get_weak_areas(session, user_id, cert_id=cert_id)
+        recommendations = await get_recommendations(session, user_id, cert_id=cert_id)
 
         # Get FSRS cards due
         result = await session.execute(
@@ -94,7 +111,7 @@ async def show_dashboard() -> None:
     console.print(
         Panel(
             "[bold cyan]cert-pepper Progress Dashboard[/bold cyan]",
-            subtitle="Security+ SY0-701",
+            subtitle=cert_label,
             border_style="cyan",
         )
     )
@@ -127,9 +144,9 @@ async def show_dashboard() -> None:
     domain_table.add_column("Accuracy", justify="right")
     domain_table.add_column("Status", justify="center")
 
-    for num in range(1, 6):
-        name = DOMAIN_NAMES[num]
-        weight = DOMAIN_WEIGHTS[num]
+    for num in sorted(domain_names.keys()):
+        name = domain_names[num]
+        weight = domain_weights[num]
         if num in domain_stats:
             total, correct = domain_stats[num]
             correct = correct or 0
@@ -189,7 +206,6 @@ async def show_dashboard() -> None:
 
     # Exam readiness
     console.print()
-    days_to_exam = 10  # TODO: calculate from config
     if score.predicted_score >= 750:
         console.print(
             f"[bold green]Exam Readiness: READY[/bold green] — "

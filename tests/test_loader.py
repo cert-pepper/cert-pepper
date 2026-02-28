@@ -14,14 +14,16 @@ import pytest
 from sqlalchemy import text
 
 from cert_pepper.db.connection import get_session
-from cert_pepper.models.content import ParsedQuestion, ParsedFlashcard, ParsedAcronym
+from cert_pepper.models.content import ExamConfig, ExamDomain, ParsedQuestion, ParsedFlashcard, ParsedAcronym
 from cert_pepper.ingestion.loader import (
+    ingest_exam_config,
+    get_domain_id,
     ingest_questions,
     ingest_flashcards,
     ingest_acronyms,
 )
 
-from tests.conftest import get_user_id
+from tests.conftest import get_cert_id, get_user_id
 
 
 # ---------------------------------------------------------------------------
@@ -261,3 +263,116 @@ class TestIngestAcronyms:
         async with get_session() as session:
             count = await ingest_acronyms(session, [])
         assert count == 0
+
+
+# ---------------------------------------------------------------------------
+# ingest_exam_config
+# ---------------------------------------------------------------------------
+
+def make_exam_config(code: str = "TEST-001", n_domains: int = 2) -> ExamConfig:
+    domains = [
+        ExamDomain(number=i + 1, name=f"Domain {i + 1}", weight_pct=100.0 / n_domains)
+        for i in range(n_domains)
+    ]
+    return ExamConfig(code=code, name=f"{code} Exam", vendor="TestVendor", domains=domains)
+
+
+class TestIngestExamConfig:
+    async def test_creates_certification_and_domains(self, db):
+        exam = make_exam_config("NEWCERT", n_domains=2)
+        async with get_session() as session:
+            cert_id = await ingest_exam_config(session, exam)
+            await session.commit()
+
+        async with get_session() as session:
+            result = await session.execute(
+                text("SELECT code, name FROM certifications WHERE id = :cid"),
+                {"cid": cert_id},
+            )
+            row = result.fetchone()
+        assert row is not None
+        assert row[0] == "NEWCERT"
+
+    async def test_creates_correct_number_of_domains(self, db):
+        exam = make_exam_config("CERT3", n_domains=3)
+        async with get_session() as session:
+            cert_id = await ingest_exam_config(session, exam)
+            await session.commit()
+
+        async with get_session() as session:
+            result = await session.execute(
+                text("SELECT COUNT(*) FROM domains WHERE certification_id = :cid"),
+                {"cid": cert_id},
+            )
+        assert result.scalar() == 3
+
+    async def test_is_idempotent(self, db):
+        """Calling ingest_exam_config twice doesn't duplicate the certification."""
+        exam = make_exam_config("IDEM")
+        async with get_session() as session:
+            await ingest_exam_config(session, exam)
+            await session.commit()
+
+        async with get_session() as session:
+            await ingest_exam_config(session, exam)
+            await session.commit()
+
+        async with get_session() as session:
+            result = await session.execute(
+                text("SELECT COUNT(*) FROM certifications WHERE code = 'IDEM'")
+            )
+        assert result.scalar() == 1
+
+    async def test_updates_domain_weight_on_upsert(self, db):
+        """Re-ingesting with updated weights updates existing domain rows."""
+        exam = ExamConfig(
+            code="UPDT",
+            name="Update Exam",
+            domains=[ExamDomain(number=1, name="D1", weight_pct=100.0)],
+        )
+        async with get_session() as session:
+            cert_id = await ingest_exam_config(session, exam)
+            await session.commit()
+
+        # Re-ingest with a different weight
+        exam2 = ExamConfig(
+            code="UPDT",
+            name="Update Exam",
+            domains=[ExamDomain(number=1, name="D1 Updated", weight_pct=100.0)],
+        )
+        async with get_session() as session:
+            await ingest_exam_config(session, exam2)
+            await session.commit()
+
+        async with get_session() as session:
+            result = await session.execute(
+                text("SELECT name FROM domains WHERE certification_id = :cid AND number = 1"),
+                {"cid": cert_id},
+            )
+            name = result.scalar()
+        assert name == "D1 Updated"
+
+
+# ---------------------------------------------------------------------------
+# get_domain_id scoped by cert
+# ---------------------------------------------------------------------------
+
+class TestGetDomainIdScoped:
+    async def test_scoped_lookup_finds_correct_domain(self, db):
+        """get_domain_id with cert_id only returns the domain belonging to that cert."""
+        async with get_session() as session:
+            cert_id = await get_cert_id(session, "SY0-701")
+            domain_id = await get_domain_id(session, 4, cert_id=cert_id)
+        assert domain_id is not None
+
+    async def test_scoped_lookup_returns_none_for_wrong_cert(self, db):
+        """get_domain_id with a non-existent cert_id returns None."""
+        async with get_session() as session:
+            domain_id = await get_domain_id(session, 4, cert_id=9999)
+        assert domain_id is None
+
+    async def test_unscoped_lookup_still_works(self, db):
+        """get_domain_id without cert_id uses the old behavior."""
+        async with get_session() as session:
+            domain_id = await get_domain_id(session, 4)
+        assert domain_id is not None

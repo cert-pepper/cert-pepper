@@ -87,8 +87,29 @@ async def init_db() -> None:
                 if "already exists" not in str(e).lower():
                     raise
 
+    # Run migrations for existing DBs (idempotent — swallows duplicate column errors)
+    await _run_migrations()
+
     # Seed the default certification and user
     await _seed_defaults()
+
+
+async def _run_migrations() -> None:
+    """Add new columns to existing tables. Idempotent: swallows duplicate column errors."""
+    migrations = [
+        "ALTER TABLE flashcards ADD COLUMN certification_id INTEGER REFERENCES certifications(id)",
+        "ALTER TABLE acronyms ADD COLUMN certification_id INTEGER REFERENCES certifications(id)",
+        "ALTER TABLE study_sessions ADD COLUMN certification_id INTEGER REFERENCES certifications(id)",
+        "ALTER TABLE predicted_scores ADD COLUMN certification_id INTEGER REFERENCES certifications(id)",
+    ]
+    engine = get_engine()
+    async with engine.begin() as conn:
+        for stmt in migrations:
+            try:
+                await conn.execute(text(stmt))
+            except Exception as e:
+                if "duplicate column name" not in str(e).lower():
+                    raise
 
 
 async def _seed_defaults() -> None:

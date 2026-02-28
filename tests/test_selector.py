@@ -16,7 +16,11 @@ from sqlalchemy import text
 from cert_pepper.db.connection import get_session
 from cert_pepper.engine.selector import select_question, select_exam_questions
 
-from tests.conftest import seed_question, seed_session, get_user_id
+from cert_pepper.engine.selector import get_domain_weights
+from tests.conftest import (
+    seed_certification, seed_domains_for_cert, get_cert_id,
+    seed_question, seed_session, get_user_id,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -221,3 +225,82 @@ class TestSelectExamQuestions:
             result = await select_exam_questions(session, user_id, total=20)
 
         assert len(result) == len(set(result))
+
+
+# ---------------------------------------------------------------------------
+# get_domain_weights
+# ---------------------------------------------------------------------------
+
+class TestGetDomainWeights:
+    async def test_returns_dict_keyed_by_domain_number(self, db):
+        async with get_session() as session:
+            cert_id = await get_cert_id(session, "SY0-701")
+            weights = await get_domain_weights(session, cert_id)
+
+        assert set(weights.keys()) == {1, 2, 3, 4, 5}
+
+    async def test_weight_fractions_sum_to_one(self, db):
+        async with get_session() as session:
+            cert_id = await get_cert_id(session, "SY0-701")
+            weights = await get_domain_weights(session, cert_id)
+
+        total = sum(weights.values())
+        assert abs(total - 1.0) < 0.001
+
+    async def test_domain4_weight_is_028(self, db):
+        async with get_session() as session:
+            cert_id = await get_cert_id(session, "SY0-701")
+            weights = await get_domain_weights(session, cert_id)
+
+        assert weights[4] == pytest.approx(0.28, abs=1e-6)
+
+
+# ---------------------------------------------------------------------------
+# Multi-cert isolation
+# ---------------------------------------------------------------------------
+
+class TestMultiCertIsolation:
+    async def test_questions_scoped_by_cert_id(self, db):
+        """Questions from cert B must not appear when querying cert A."""
+        async with get_session() as session:
+            user_id = await get_user_id(session)
+            cert_a_id = await get_cert_id(session, "SY0-701")
+
+            # Create cert B with its own domain
+            cert_b_id = await seed_certification(session, "CERT-B")
+            await seed_domains_for_cert(session, cert_b_id, [(1, "B Domain", 100.0)])
+
+            # Insert question for cert A domain 4
+            cert_a_q = await seed_question(session, domain_number=4, cert_id=cert_a_id)
+            # Insert question for cert B domain 1
+            cert_b_q = await seed_question(session, domain_number=1, cert_id=cert_b_id, number=99)
+            await session.commit()
+
+        # Query for cert A — must not return cert B question
+        async with get_session() as session:
+            user_id = await get_user_id(session)
+            result = await select_question(session, user_id, cert_id=cert_a_id)
+        assert result == cert_a_q
+        assert result != cert_b_q
+
+    async def test_exam_questions_only_from_specified_cert(self, db):
+        """select_exam_questions returns only questions from the given cert."""
+        async with get_session() as session:
+            user_id = await get_user_id(session)
+            cert_a_id = await get_cert_id(session, "SY0-701")
+
+            cert_b_id = await seed_certification(session, "CERT-B2")
+            await seed_domains_for_cert(session, cert_b_id, [(1, "B Domain", 100.0)])
+
+            # Insert one question per cert
+            for num in range(1, 4):
+                await seed_question(session, domain_number=4, number=num, cert_id=cert_a_id)
+            await seed_question(session, domain_number=1, cert_id=cert_b_id, number=99)
+            await session.commit()
+
+        async with get_session() as session:
+            user_id = await get_user_id(session)
+            cert_b_qs = await select_exam_questions(session, user_id, total=5, cert_id=cert_b_id)
+
+        # All returned IDs should belong to cert B questions
+        assert len(cert_b_qs) <= 1  # only 1 question in cert B

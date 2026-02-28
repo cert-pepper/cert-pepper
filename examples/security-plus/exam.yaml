@@ -1,0 +1,21 @@
+code: "SY0-701"
+name: "CompTIA Security+"
+vendor: "CompTIA"
+passing_score: 750
+max_score: 900
+domains:
+  - number: 1
+    name: "General Security Concepts"
+    weight_pct: 12.0
+  - number: 2
+    name: "Threats, Vulnerabilities, and Mitigations"
+    weight_pct: 22.0
+  - number: 3
+    name: "Security Architecture"
+    weight_pct: 18.0
+  - number: 4
+    name: "Security Operations"
+    weight_pct: 28.0
+  - number: 5
+    name: "Program Management and Oversight"
+    weight_pct: 20.0

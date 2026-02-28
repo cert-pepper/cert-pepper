@@ -179,6 +179,7 @@ async def search_questions(
     difficulty_max: float = 1.0,
     keyword: str = "",
     limit: int = 10,
+    exam_code: str | None = None,
 ) -> str:
     """Search questions by domain, difficulty, or keyword."""
     from sqlalchemy import text
@@ -194,13 +195,19 @@ async def search_questions(
         clauses.append("(q.stem LIKE :kw OR q.explanation LIKE :kw)")
         params["kw"] = f"%{keyword}%"
 
+    if exam_code:
+        clauses.append("c.code = :exam_code")
+        params["exam_code"] = exam_code
+
     where = " AND ".join(clauses)
+    join_cert = "JOIN certifications c ON c.id = d.certification_id" if exam_code else ""
 
     async with get_session() as db:
         result = await db.execute(
             text(f"""
                 SELECT q.id, d.number, q.number, q.stem, q.correct_answer, q.difficulty
                 FROM questions q JOIN domains d ON d.id = q.domain_id
+                {join_cert}
                 WHERE {where}
                 ORDER BY q.difficulty ASC
                 LIMIT :limit
@@ -241,7 +248,7 @@ async def get_flashcard(flashcard_id: int) -> str:
 
 
 @mcp.tool()
-async def lookup_acronym(acronym: str) -> str:
+async def lookup_acronym(acronym: str, exam_code: str | None = None) -> str:
     """Look up an acronym's full meaning."""
     from sqlalchemy import text
 

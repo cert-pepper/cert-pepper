@@ -173,47 +173,61 @@ class TestStudySessionAccuracy:
 # PredictedScore.weighted_accuracy
 # ---------------------------------------------------------------------------
 
+WEIGHTS_5 = {1: 0.12, 2: 0.22, 3: 0.18, 4: 0.28, 5: 0.20}
+
+
 class TestPredictedScoreWeightedAccuracy:
     def test_all_domains_at_100_pct_gives_100_pct(self):
         score = PredictedScore(
-            d1_accuracy=1.0, d2_accuracy=1.0, d3_accuracy=1.0,
-            d4_accuracy=1.0, d5_accuracy=1.0,
+            domain_accuracies={1: 1.0, 2: 1.0, 3: 1.0, 4: 1.0, 5: 1.0},
+            domain_weights=WEIGHTS_5,
         )
         assert score.weighted_accuracy == pytest.approx(1.0, abs=1e-6)
 
     def test_all_domains_at_zero_gives_zero(self):
-        score = PredictedScore()
+        score = PredictedScore(domain_accuracies={}, domain_weights=WEIGHTS_5)
         assert score.weighted_accuracy == pytest.approx(0.0)
 
     def test_domain4_only_at_100_pct_gives_28_pct(self):
         """Domain 4 has 28% weight; all others 0% → weighted = 0.28."""
         score = PredictedScore(
-            d1_accuracy=0.0, d2_accuracy=0.0, d3_accuracy=0.0,
-            d4_accuracy=1.0, d5_accuracy=0.0,
+            domain_accuracies={4: 1.0},
+            domain_weights=WEIGHTS_5,
         )
         assert score.weighted_accuracy == pytest.approx(0.28, abs=1e-6)
 
     def test_domain1_only_at_100_pct_gives_12_pct(self):
         score = PredictedScore(
-            d1_accuracy=1.0, d2_accuracy=0.0, d3_accuracy=0.0,
-            d4_accuracy=0.0, d5_accuracy=0.0,
+            domain_accuracies={1: 1.0},
+            domain_weights=WEIGHTS_5,
         )
         assert score.weighted_accuracy == pytest.approx(0.12, abs=1e-6)
 
     def test_weights_implied_by_formula_sum_to_one(self):
         """Setting each domain to 1.0 in turn and summing weighted_accuracy must equal 1.0."""
         total = sum(
-            PredictedScore(**{f"d{i}_accuracy": 1.0}).weighted_accuracy
+            PredictedScore(
+                domain_accuracies={i: 1.0},
+                domain_weights=WEIGHTS_5,
+            ).weighted_accuracy
             for i in range(1, 6)
         )
         assert total == pytest.approx(1.0, abs=1e-6)
 
     def test_uniform_80_pct_gives_80_pct_weighted(self):
         score = PredictedScore(
-            d1_accuracy=0.8, d2_accuracy=0.8, d3_accuracy=0.8,
-            d4_accuracy=0.8, d5_accuracy=0.8,
+            domain_accuracies={1: 0.8, 2: 0.8, 3: 0.8, 4: 0.8, 5: 0.8},
+            domain_weights=WEIGHTS_5,
         )
         assert score.weighted_accuracy == pytest.approx(0.8, abs=1e-6)
+
+    def test_shim_property_d4_reads_from_dict(self):
+        score = PredictedScore(domain_accuracies={4: 0.75}, domain_weights=WEIGHTS_5)
+        assert score.d4_accuracy == pytest.approx(0.75)
+
+    def test_shim_property_missing_domain_returns_zero(self):
+        score = PredictedScore(domain_accuracies={}, domain_weights=WEIGHTS_5)
+        assert score.d1_accuracy == 0.0
 
 
 # ---------------------------------------------------------------------------

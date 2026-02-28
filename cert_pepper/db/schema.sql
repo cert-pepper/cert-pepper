@@ -51,21 +51,23 @@ CREATE TABLE IF NOT EXISTS questions (
 );
 
 CREATE TABLE IF NOT EXISTS flashcards (
-    id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    domain_id   INTEGER REFERENCES domains(id),
-    category    TEXT NOT NULL DEFAULT '',
-    front       TEXT NOT NULL,
-    back        TEXT NOT NULL,
-    tip         TEXT NOT NULL DEFAULT '',
-    created_at  DATETIME DEFAULT CURRENT_TIMESTAMP
+    id               INTEGER PRIMARY KEY AUTOINCREMENT,
+    domain_id        INTEGER REFERENCES domains(id),
+    category         TEXT NOT NULL DEFAULT '',
+    front            TEXT NOT NULL,
+    back             TEXT NOT NULL,
+    tip              TEXT NOT NULL DEFAULT '',
+    certification_id INTEGER REFERENCES certifications(id),
+    created_at       DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS acronyms (
-    id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    acronym     TEXT NOT NULL UNIQUE,
-    full_term   TEXT NOT NULL,
-    category    TEXT NOT NULL DEFAULT '',
-    created_at  DATETIME DEFAULT CURRENT_TIMESTAMP
+    id               INTEGER PRIMARY KEY AUTOINCREMENT,
+    acronym          TEXT NOT NULL UNIQUE,
+    full_term        TEXT NOT NULL,
+    category         TEXT NOT NULL DEFAULT '',
+    certification_id INTEGER REFERENCES certifications(id),
+    created_at       DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
 -- ============================================================
@@ -98,15 +100,16 @@ CREATE TABLE IF NOT EXISTS users (
 );
 
 CREATE TABLE IF NOT EXISTS study_sessions (
-    id              INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id         INTEGER NOT NULL REFERENCES users(id),
-    session_type    TEXT NOT NULL,          -- 'study', 'quiz', 'exam', 'flashcard'
-    domain_filter   INTEGER,                -- NULL = all domains
-    started_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
-    ended_at        DATETIME,
-    questions_seen  INTEGER NOT NULL DEFAULT 0,
+    id               INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id          INTEGER NOT NULL REFERENCES users(id),
+    session_type     TEXT NOT NULL,
+    domain_filter    INTEGER,
+    started_at       DATETIME DEFAULT CURRENT_TIMESTAMP,
+    ended_at         DATETIME,
+    questions_seen   INTEGER NOT NULL DEFAULT 0,
     questions_correct INTEGER NOT NULL DEFAULT 0,
-    total_time_seconds INTEGER NOT NULL DEFAULT 0
+    total_time_seconds INTEGER NOT NULL DEFAULT 0,
+    certification_id INTEGER REFERENCES certifications(id)
 );
 
 -- ============================================================
@@ -205,16 +208,17 @@ CREATE TABLE IF NOT EXISTS daily_progress (
 );
 
 CREATE TABLE IF NOT EXISTS predicted_scores (
-    id              INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id         INTEGER NOT NULL REFERENCES users(id),
-    d1_accuracy     REAL NOT NULL DEFAULT 0.0,
-    d2_accuracy     REAL NOT NULL DEFAULT 0.0,
-    d3_accuracy     REAL NOT NULL DEFAULT 0.0,
-    d4_accuracy     REAL NOT NULL DEFAULT 0.0,
-    d5_accuracy     REAL NOT NULL DEFAULT 0.0,
-    predicted_score INTEGER NOT NULL DEFAULT 0,     -- 100-900 scale
-    pass_probability REAL NOT NULL DEFAULT 0.0,     -- 0.0-1.0
-    created_at      DATETIME DEFAULT CURRENT_TIMESTAMP
+    id               INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id          INTEGER NOT NULL REFERENCES users(id),
+    d1_accuracy      REAL NOT NULL DEFAULT 0.0,
+    d2_accuracy      REAL NOT NULL DEFAULT 0.0,
+    d3_accuracy      REAL NOT NULL DEFAULT 0.0,
+    d4_accuracy      REAL NOT NULL DEFAULT 0.0,
+    d5_accuracy      REAL NOT NULL DEFAULT 0.0,
+    predicted_score  INTEGER NOT NULL DEFAULT 0,
+    pass_probability REAL NOT NULL DEFAULT 0.0,
+    certification_id INTEGER REFERENCES certifications(id),
+    created_at       DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
 -- ============================================================

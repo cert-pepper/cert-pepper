@@ -20,38 +20,47 @@ async def _get_user_id(session) -> int:
 
 
 @mcp.tool()
-async def predict_score() -> str:
+async def predict_score(exam_code: str | None = None) -> str:
     """Calculate predicted exam score and pass probability based on your performance."""
+    from cert_pepper.db.exams import resolve_cert_id
     from cert_pepper.engine.scorer import predict_score as _predict_score
 
     async with get_session() as db:
         user_id = await _get_user_id(db)
-        score = await _predict_score(db, user_id)
+        try:
+            cert_id = await resolve_cert_id(db, exam_code)
+        except ValueError as e:
+            return json.dumps({"error": str(e)})
+        score = await _predict_score(db, user_id, cert_id=cert_id)
+
+    domain_acc = {
+        f"domain_{d}": f"{acc:.0%}"
+        for d, acc in sorted(score.domain_accuracies.items())
+    }
 
     return json.dumps({
         "predicted_score": score.predicted_score,
         "pass_probability": f"{score.pass_probability:.0%}",
         "passing_score": 750,
         "status": "PASS" if score.predicted_score >= 750 else "FAIL",
-        "domain_accuracies": {
-            "domain_1": f"{score.d1_accuracy:.0%}",
-            "domain_2": f"{score.d2_accuracy:.0%}",
-            "domain_3": f"{score.d3_accuracy:.0%}",
-            "domain_4": f"{score.d4_accuracy:.0%}",
-            "domain_5": f"{score.d5_accuracy:.0%}",
-        },
+        "domain_accuracies": domain_acc,
         "weighted_accuracy": f"{score.weighted_accuracy:.0%}",
     })
 
 
 @mcp.tool()
-async def get_weak_areas(threshold: float = 0.70) -> str:
+async def get_weak_areas(threshold: float = 0.70, exam_code: str | None = None) -> str:
     """Get domains below a given accuracy threshold (0.0-1.0)."""
+    from cert_pepper.db.exams import resolve_cert_id
     from cert_pepper.engine.scorer import get_weak_areas as _get_weak_areas
 
     async with get_session() as db:
         user_id = await _get_user_id(db)
-        weak = await _get_weak_areas(db, user_id, threshold=threshold)
+        try:
+            cert_id = await resolve_cert_id(db, exam_code)
+        except ValueError as e:
+            return json.dumps({"error": str(e)})
+        weak = await _get_weak_areas(db, user_id, threshold=threshold, cert_id=cert_id)
 
     return json.dumps({
         "weak_areas": [
@@ -70,13 +79,21 @@ async def get_weak_areas(threshold: float = 0.70) -> str:
 
 
 @mcp.tool()
-async def get_study_recommendations(days_remaining: int = 10) -> str:
+async def get_study_recommendations(
+    days_remaining: int = 10,
+    exam_code: str | None = None,
+) -> str:
     """Get prioritized study recommendations based on weak areas and days remaining."""
+    from cert_pepper.db.exams import resolve_cert_id
     from cert_pepper.engine.scorer import get_recommendations
 
     async with get_session() as db:
         user_id = await _get_user_id(db)
-        recs = await get_recommendations(db, user_id, days_remaining=days_remaining)
+        try:
+            cert_id = await resolve_cert_id(db, exam_code)
+        except ValueError as e:
+            return json.dumps({"error": str(e)})
+        recs = await get_recommendations(db, user_id, days_remaining=days_remaining, cert_id=cert_id)
 
     return json.dumps({
         "days_remaining": days_remaining,
@@ -94,28 +111,48 @@ async def get_study_recommendations(days_remaining: int = 10) -> str:
 
 
 @mcp.tool()
-async def get_performance_trend(days: int = 7) -> str:
+async def get_performance_trend(days: int = 7, exam_code: str | None = None) -> str:
     """Get accuracy trend per domain over recent sessions."""
     from sqlalchemy import text
 
     async with get_session() as db:
         user_id = await _get_user_id(db)
-        result = await db.execute(
-            text("""
-                SELECT date(qa.created_at) as day,
-                       d.number as domain_num,
-                       COUNT(*) as total,
-                       SUM(qa.is_correct) as correct
-                FROM question_attempts qa
-                JOIN questions q ON q.id = qa.question_id
-                JOIN domains d ON d.id = q.domain_id
-                WHERE qa.user_id = :uid
-                AND qa.created_at >= datetime('now', :days_ago)
-                GROUP BY day, domain_num
-                ORDER BY day DESC, domain_num
-            """),
-            {"uid": user_id, "days_ago": f"-{days} days"},
-        )
+
+        if exam_code:
+            result = await db.execute(
+                text("""
+                    SELECT date(qa.created_at) as day,
+                           d.number as domain_num,
+                           COUNT(*) as total,
+                           SUM(qa.is_correct) as correct
+                    FROM question_attempts qa
+                    JOIN questions q ON q.id = qa.question_id
+                    JOIN domains d ON d.id = q.domain_id
+                    JOIN certifications c ON c.id = d.certification_id AND c.code = :exam_code
+                    WHERE qa.user_id = :uid
+                    AND qa.created_at >= datetime('now', :days_ago)
+                    GROUP BY day, domain_num
+                    ORDER BY day DESC, domain_num
+                """),
+                {"uid": user_id, "days_ago": f"-{days} days", "exam_code": exam_code},
+            )
+        else:
+            result = await db.execute(
+                text("""
+                    SELECT date(qa.created_at) as day,
+                           d.number as domain_num,
+                           COUNT(*) as total,
+                           SUM(qa.is_correct) as correct
+                    FROM question_attempts qa
+                    JOIN questions q ON q.id = qa.question_id
+                    JOIN domains d ON d.id = q.domain_id
+                    WHERE qa.user_id = :uid
+                    AND qa.created_at >= datetime('now', :days_ago)
+                    GROUP BY day, domain_num
+                    ORDER BY day DESC, domain_num
+                """),
+                {"uid": user_id, "days_ago": f"-{days} days"},
+            )
         rows = result.fetchall()
 
     trend: dict[str, dict] = {}
@@ -134,12 +171,18 @@ async def progress_dashboard() -> str:
     """Full progress report in Markdown."""
     from sqlalchemy import text
 
+    from cert_pepper.db.exams import resolve_cert_id
     from cert_pepper.engine.scorer import get_weak_areas, predict_score
 
     async with get_session() as db:
         user_id = await _get_user_id(db)
-        score = await predict_score(db, user_id)
-        weak = await get_weak_areas(db, user_id)
+        try:
+            cert_id = await resolve_cert_id(db)
+        except ValueError:
+            cert_id = None
+
+        score = await predict_score(db, user_id, cert_id=cert_id)
+        weak = await get_weak_areas(db, user_id, cert_id=cert_id)
 
         result = await db.execute(
             text("SELECT COUNT(*), SUM(is_correct) FROM question_attempts WHERE user_id=:uid"),
@@ -149,8 +192,23 @@ async def progress_dashboard() -> str:
         total = row[0] or 0
         correct = row[1] or 0
 
+        # Get domain names dynamically
+        if cert_id is not None:
+            result = await db.execute(
+                text("SELECT number, name, weight_pct FROM domains WHERE certification_id = :cid ORDER BY number"),
+                {"cid": cert_id},
+            )
+            domains = result.fetchall()
+        else:
+            domains = []
+
     acc = correct / total if total > 0 else 0
     status = "PASS READY" if score.predicted_score >= 750 else "NEEDS WORK"
+
+    domain_rows = "\n".join(
+        f"| D{num}: {name[:30]} | {score.domain_accuracies.get(num, 0.0):.0%} | {weight:.0f}% |"
+        for num, name, weight in domains
+    )
 
     report = f"""# cert-pepper Progress Dashboard
 
@@ -163,11 +221,7 @@ async def progress_dashboard() -> str:
 ## Domain Accuracies
 | Domain | Accuracy | Weight |
 |--------|----------|--------|
-| D1: General Security | {score.d1_accuracy:.0%} | 12% |
-| D2: Threats & Vulnerabilities | {score.d2_accuracy:.0%} | 22% |
-| D3: Security Architecture | {score.d3_accuracy:.0%} | 18% |
-| D4: Security Operations | {score.d4_accuracy:.0%} | 28% |
-| D5: Program Management | {score.d5_accuracy:.0%} | 20% |
+{domain_rows}
 
 ## Weak Areas (below 70%)
 {chr(10).join(f"- Domain {w.domain_number}: {w.domain_name} — {w.accuracy_pct:.0%} ({w.attempts} attempts)" for w in weak) or "None — all domains above threshold!"}

@@ -11,8 +11,10 @@ from __future__ import annotations
 import pytest
 from sqlalchemy import text
 
+import cert_pepper.db.connection as _conn_module
 from cert_pepper.db.connection import (
     _strip_sql_comments,
+    _run_migrations,
     get_session,
     init_db,
 )
@@ -205,3 +207,65 @@ class TestGetSession:
                 text("SELECT COUNT(*) FROM users WHERE username='session_a'")
             )
             assert result.scalar() == 1
+
+
+# ---------------------------------------------------------------------------
+# _run_migrations — idempotency and column presence
+# ---------------------------------------------------------------------------
+
+class TestMigrations:
+    async def test_new_columns_present_after_init_db(self, db):
+        """Fresh DB from schema.sql already has the certification_id columns."""
+        async with get_session() as session:
+            for table, col in [
+                ("flashcards", "certification_id"),
+                ("acronyms", "certification_id"),
+                ("study_sessions", "certification_id"),
+                ("predicted_scores", "certification_id"),
+            ]:
+                result = await session.execute(text(f"PRAGMA table_info({table})"))
+                columns = {row[1] for row in result.fetchall()}
+                assert col in columns, f"{table} is missing column {col}"
+
+    async def test_run_migrations_is_idempotent(self, db):
+        """Running _run_migrations twice must not raise."""
+        await _run_migrations()  # second call (first was in init_db)
+        async with get_session() as session:
+            result = await session.execute(text("PRAGMA table_info(flashcards)"))
+            columns = {row[1] for row in result.fetchall()}
+            assert "certification_id" in columns
+
+    async def test_migrations_add_column_to_legacy_table(self, tmp_path, monkeypatch):
+        """Given an old-style flashcards table without certification_id, migration adds it."""
+        from pathlib import Path
+
+        db_path = tmp_path / "legacy.db"
+        monkeypatch.setenv("DB_PATH", str(db_path))
+        _conn_module._engine = None
+        _conn_module._session_factory = None
+
+        from cert_pepper.db.connection import get_engine
+
+        engine = get_engine()
+        async with engine.begin() as conn:
+            # Create old-style tables without certification_id
+            for stmt in [
+                "CREATE TABLE IF NOT EXISTS certifications (id INTEGER PRIMARY KEY)",
+                "CREATE TABLE IF NOT EXISTS flashcards (id INTEGER PRIMARY KEY, front TEXT, back TEXT, tip TEXT)",
+                "CREATE TABLE IF NOT EXISTS acronyms (id INTEGER PRIMARY KEY, acronym TEXT UNIQUE, full_term TEXT, category TEXT)",
+                "CREATE TABLE IF NOT EXISTS study_sessions (id INTEGER PRIMARY KEY, user_id INTEGER, session_type TEXT)",
+                "CREATE TABLE IF NOT EXISTS predicted_scores (id INTEGER PRIMARY KEY, user_id INTEGER, predicted_score INTEGER)",
+            ]:
+                await conn.execute(text(stmt))
+
+        await _run_migrations()
+
+        async with engine.begin() as conn:
+            for table in ("flashcards", "acronyms", "study_sessions", "predicted_scores"):
+                result = await conn.execute(text(f"PRAGMA table_info({table})"))
+                columns = {row[1] for row in result.fetchall()}
+                assert "certification_id" in columns, f"{table} missing certification_id after migration"
+
+        await engine.dispose()
+        _conn_module._engine = None
+        _conn_module._session_factory = None

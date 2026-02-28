@@ -19,11 +19,13 @@ from cert_pepper.engine.scorer import (
     predict_score,
     get_weak_areas,
     get_recommendations,
-    DOMAIN_WEIGHTS,
     WEAK_AREA_THRESHOLD,
 )
 
-from tests.conftest import seed_question, seed_attempt, seed_session, get_user_id
+from tests.conftest import (
+    seed_certification, seed_domains_for_cert, get_cert_id,
+    seed_question, seed_attempt, seed_session, get_user_id,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -286,3 +288,70 @@ class TestGetRecommendations:
         domain2_rec = next((r for r in recs if r.domain_number == 2), None)
         assert domain2_rec is not None
         assert domain2_rec.urgency == "critical"
+
+
+# ---------------------------------------------------------------------------
+# Multi-cert scoping
+# ---------------------------------------------------------------------------
+
+class TestMultiCertScoring:
+    async def test_get_domain_accuracies_scoped_to_cert(self, db):
+        """Attempts on cert B questions don't appear in cert A accuracy."""
+        async with get_session() as session:
+            user_id = await get_user_id(session)
+            cert_a_id = await get_cert_id(session, "SY0-701")
+
+            cert_b_id = await seed_certification(session, "CERT-SCORE-B")
+            await seed_domains_for_cert(session, cert_b_id, [(1, "B Domain", 100.0)])
+
+            sess_id = await seed_session(session, user_id)
+            # Attempt on cert B question
+            b_q = await seed_question(session, domain_number=1, cert_id=cert_b_id, number=999)
+            await seed_attempt(session, user_id, b_q, sess_id, is_correct=True)
+            await session.commit()
+
+        async with get_session() as session:
+            user_id = await get_user_id(session)
+            cert_a_id = await get_cert_id(session, "SY0-701")
+            result = await get_domain_accuracies(session, user_id, cert_id=cert_a_id)
+
+        # Cert A should have no attempts recorded
+        assert result == {}
+
+    async def test_predict_score_reads_weights_from_db(self, db):
+        """predict_score uses domain weights from the DB, not hardcoded constants."""
+        async with get_session() as session:
+            user_id = await get_user_id(session)
+            cert_id = await get_cert_id(session, "SY0-701")
+            sess_id = await seed_session(session, user_id)
+            for domain in range(1, 6):
+                q = await seed_question(session, domain_number=domain, number=1, cert_id=cert_id)
+                await seed_attempt(session, user_id, q, sess_id, is_correct=True)
+            await session.commit()
+
+        async with get_session() as session:
+            user_id = await get_user_id(session)
+            cert_id = await get_cert_id(session, "SY0-701")
+            score = await predict_score(session, user_id, cert_id=cert_id)
+
+        # With all domains at 100%, score = 900
+        assert score.predicted_score == 900
+        assert set(score.domain_weights.keys()) == {1, 2, 3, 4, 5}
+
+    async def test_get_weak_areas_scoped_to_cert(self, db):
+        """get_weak_areas only returns domains from the specified cert."""
+        async with get_session() as session:
+            user_id = await get_user_id(session)
+            cert_b_id = await seed_certification(session, "CERT-WEAK-B")
+            await seed_domains_for_cert(session, cert_b_id, [(1, "B Domain", 100.0)])
+            cert_b_q = await seed_question(session, domain_number=1, cert_id=cert_b_id, number=888)
+            await session.commit()
+
+        async with get_session() as session:
+            user_id = await get_user_id(session)
+            cert_a_id = await get_cert_id(session, "SY0-701")
+            weak = await get_weak_areas(session, user_id, cert_id=cert_a_id)
+
+        # Cert A has 5 domains; none of them is cert B's domain
+        assert all(w.domain_number in {1, 2, 3, 4, 5} for w in weak)
+        assert len(weak) == 5

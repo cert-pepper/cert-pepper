@@ -16,13 +16,20 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
-DOMAIN_WEIGHTS = {1: 0.12, 2: 0.22, 3: 0.18, 4: 0.28, 5: 0.20}
+async def get_domain_weights(session: AsyncSession, cert_id: int) -> dict[int, float]:
+    """Return {domain_number: weight_fraction} from DB for a given certification."""
+    result = await session.execute(
+        text("SELECT number, weight_pct FROM domains WHERE certification_id = :cert_id"),
+        {"cert_id": cert_id},
+    )
+    return {row[0]: row[1] / 100.0 for row in result.fetchall()}
 
 
 async def select_question(
     session: AsyncSession,
     user_id: int,
     domain_filter: int | None = None,
+    cert_id: int | None = None,
     now: datetime | None = None,
 ) -> int | None:
     """
@@ -31,27 +38,39 @@ async def select_question(
     Selection strategy:
     1. Due FSRS review cards (overdue first)
     2. Due FSRS learning cards
-    3. Weak domain new questions
-    4. Any unseen question
+    3. Unseen questions weighted by domain priority
+    4. Any unseen question (least recently attempted)
     """
     if now is None:
         now = datetime.utcnow()
 
-    domain_clause = f"AND q.domain_id = (SELECT id FROM domains WHERE number = {domain_filter})" if domain_filter else ""
+    if cert_id is None:
+        from cert_pepper.db.exams import resolve_cert_id
+        cert_id = await resolve_cert_id(session)
+
+    params: dict = {
+        "user_id": user_id,
+        "now": now,
+        "cert_id": cert_id,
+        "domain_filter": domain_filter,
+    }
 
     # 1. Overdue review cards
     result = await session.execute(
-        text(f"""
+        text("""
             SELECT q.id
             FROM questions q
-            JOIN fsrs_cards fc ON fc.content_type = 'question' AND fc.content_id = q.id AND fc.user_id = :user_id
+            JOIN domains d ON d.id = q.domain_id
+            JOIN fsrs_cards fc ON fc.content_type = 'question'
+                AND fc.content_id = q.id AND fc.user_id = :user_id
             WHERE fc.state = 'review'
             AND fc.due_date <= :now
-            {domain_clause}
+            AND d.certification_id = :cert_id
+            AND (:domain_filter IS NULL OR d.number = :domain_filter)
             ORDER BY fc.due_date ASC
             LIMIT 1
         """),
-        {"user_id": user_id, "now": now},
+        params,
     )
     row = result.fetchone()
     if row:
@@ -59,17 +78,20 @@ async def select_question(
 
     # 2. Due learning/relearning cards
     result = await session.execute(
-        text(f"""
+        text("""
             SELECT q.id
             FROM questions q
-            JOIN fsrs_cards fc ON fc.content_type = 'question' AND fc.content_id = q.id AND fc.user_id = :user_id
+            JOIN domains d ON d.id = q.domain_id
+            JOIN fsrs_cards fc ON fc.content_type = 'question'
+                AND fc.content_id = q.id AND fc.user_id = :user_id
             WHERE fc.state IN ('learning', 'relearning')
             AND fc.due_date <= :now
-            {domain_clause}
+            AND d.certification_id = :cert_id
+            AND (:domain_filter IS NULL OR d.number = :domain_filter)
             ORDER BY fc.due_date ASC
             LIMIT 1
         """),
-        {"user_id": user_id, "now": now},
+        params,
     )
     row = result.fetchone()
     if row:
@@ -77,7 +99,7 @@ async def select_question(
 
     # 3. Unseen questions — weighted by domain priority
     result = await session.execute(
-        text(f"""
+        text("""
             SELECT q.id, d.number as domain_num
             FROM questions q
             JOIN domains d ON d.id = q.domain_id
@@ -87,16 +109,17 @@ async def select_question(
                 AND fc.content_id = q.id
                 AND fc.user_id = :user_id
             )
-            {domain_clause}
+            AND d.certification_id = :cert_id
+            AND (:domain_filter IS NULL OR d.number = :domain_filter)
             ORDER BY d.weight_pct DESC, RANDOM()
             LIMIT 20
         """),
-        {"user_id": user_id},
+        params,
     )
     rows = result.fetchall()
     if rows:
-        # Weight by domain priority
-        weights = [DOMAIN_WEIGHTS.get(row[1], 0.2) for row in rows]
+        domain_weights = await get_domain_weights(session, cert_id)
+        weights = [domain_weights.get(row[1], 0.2) for row in rows]
         total = sum(weights)
         if total > 0:
             probs = [w / total for w in weights]
@@ -106,16 +129,18 @@ async def select_question(
 
     # 4. Anything — least recently attempted
     result = await session.execute(
-        text(f"""
+        text("""
             SELECT q.id
             FROM questions q
+            JOIN domains d ON d.id = q.domain_id
             LEFT JOIN question_attempts qa ON qa.question_id = q.id AND qa.user_id = :user_id
-            {("JOIN domains d ON d.id = q.domain_id " + domain_clause.replace("AND", "WHERE", 1)) if domain_clause else ""}
+            WHERE d.certification_id = :cert_id
+            AND (:domain_filter IS NULL OR d.number = :domain_filter)
             GROUP BY q.id
             ORDER BY MAX(qa.created_at) ASC NULLS FIRST
             LIMIT 1
         """),
-        {"user_id": user_id},
+        params,
     )
     row = result.fetchone()
     return row[0] if row else None
@@ -125,11 +150,17 @@ async def select_exam_questions(
     session: AsyncSession,
     user_id: int,
     total: int = 90,
+    cert_id: int | None = None,
 ) -> list[int]:
     """Select questions proportionally by domain weight for a mock exam."""
+    if cert_id is None:
+        from cert_pepper.db.exams import resolve_cert_id
+        cert_id = await resolve_cert_id(session)
+
+    domain_weights = await get_domain_weights(session, cert_id)
     question_ids: list[int] = []
 
-    for domain_num, weight in DOMAIN_WEIGHTS.items():
+    for domain_num, weight in domain_weights.items():
         count = round(total * weight)
         result = await session.execute(
             text("""
@@ -137,17 +168,18 @@ async def select_exam_questions(
                 FROM questions q
                 JOIN domains d ON d.id = q.domain_id
                 WHERE d.number = :domain_num
+                AND d.certification_id = :cert_id
                 ORDER BY RANDOM()
                 LIMIT :count
             """),
-            {"domain_num": domain_num, "count": count},
+            {"domain_num": domain_num, "count": count, "cert_id": cert_id},
         )
         question_ids.extend(row[0] for row in result.fetchall())
 
     # Shuffle final list
     random.shuffle(question_ids)
 
-    # Trim or pad to exact total
+    # Trim to exact total
     if len(question_ids) > total:
         question_ids = question_ids[:total]
 

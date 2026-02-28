@@ -233,6 +233,7 @@ async def run_study_session(
     domain: int | None = None,
     count: int = 10,
     use_ai: bool = True,
+    exam_code: str | None = None,
 ) -> None:
     """Run an interactive study session."""
     console.print(
@@ -247,13 +248,21 @@ async def run_study_session(
     async with get_session() as session:
         user_id = await get_default_user_id(session)
 
+        # Resolve certification
+        from cert_pepper.db.exams import resolve_cert_id
+        try:
+            cert_id = await resolve_cert_id(session, exam_code)
+        except ValueError as e:
+            console.print(f"[red]{e}[/red]")
+            return
+
         # Create study session record
         result = await session.execute(
             text("""
-                INSERT INTO study_sessions (user_id, session_type, domain_filter)
-                VALUES (:uid, 'study', :domain)
+                INSERT INTO study_sessions (user_id, session_type, domain_filter, certification_id)
+                VALUES (:uid, 'study', :domain, :cert_id)
             """),
-            {"uid": user_id, "domain": domain},
+            {"uid": user_id, "domain": domain, "cert_id": cert_id},
         )
         session_id_result = await session.execute(
             text("SELECT last_insert_rowid()")
@@ -266,7 +275,9 @@ async def run_study_session(
 
         for i in range(count):
             # Select next question
-            question_id = await selector.select_question(session, user_id, domain_filter=domain)
+            question_id = await selector.select_question(
+                session, user_id, domain_filter=domain, cert_id=cert_id
+            )
             if question_id is None:
                 console.print("[yellow]No more questions available![/yellow]")
                 break

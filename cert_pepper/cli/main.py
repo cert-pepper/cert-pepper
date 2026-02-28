@@ -87,41 +87,46 @@ def study(
     domain: Optional[int] = typer.Option(None, "--domain", "-d", help="Domain number (1-5). Default: adaptive."),
     count: int = typer.Option(10, "--count", "-n", help="Number of questions per session."),
     no_ai: bool = typer.Option(False, "--no-ai", help="Skip AI explanations (offline mode)."),
+    exam: Optional[str] = typer.Option(None, "--exam", "-e", help="Exam code (e.g. SY0-701). Auto-detects when only one exam is present."),
 ) -> None:
     """Start an adaptive study session."""
     import asyncio
     from cert_pepper.cli.study import run_study_session
-    asyncio.run(run_study_session(domain=domain, count=count, use_ai=not no_ai))
+    asyncio.run(run_study_session(domain=domain, count=count, use_ai=not no_ai, exam_code=exam))
 
 
 @app.command("quiz")
 def quiz(
     domain: int = typer.Argument(..., help="Domain number to quiz (1-5)."),
     count: int = typer.Option(5, "--count", "-n", help="Number of questions."),
+    exam: Optional[str] = typer.Option(None, "--exam", "-e", help="Exam code. Auto-detects when only one exam is present."),
 ) -> None:
     """Quick quiz on a specific domain."""
     import asyncio
     from cert_pepper.cli.study import run_study_session
-    asyncio.run(run_study_session(domain=domain, count=count, use_ai=False))
+    asyncio.run(run_study_session(domain=domain, count=count, use_ai=False, exam_code=exam))
 
 
 @app.command("exam")
-def exam(
+def exam_cmd(
     questions: int = typer.Option(90, "--questions", "-n", help="Number of questions."),
     time_limit: int = typer.Option(90, "--time", "-t", help="Time limit in minutes."),
+    exam: Optional[str] = typer.Option(None, "--exam", "-e", help="Exam code. Auto-detects when only one exam is present."),
 ) -> None:
     """Run a timed mock exam (90 questions, 90 minutes)."""
     import asyncio
     from cert_pepper.cli.exam import run_exam
-    asyncio.run(run_exam(total_questions=questions, time_limit_minutes=time_limit))
+    asyncio.run(run_exam(total_questions=questions, time_limit_minutes=time_limit, exam_code=exam))
 
 
 @app.command("progress")
-def progress() -> None:
+def progress(
+    exam: Optional[str] = typer.Option(None, "--exam", "-e", help="Exam code. Auto-detects when only one exam is present."),
+) -> None:
     """Show progress dashboard: accuracy, predicted score, weak areas."""
     import asyncio
     from cert_pepper.cli.progress import show_dashboard
-    asyncio.run(show_dashboard())
+    asyncio.run(show_dashboard(exam_code=exam))
 
 
 @app.command("pregenerate")

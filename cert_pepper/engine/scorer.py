@@ -18,16 +18,21 @@ from cert_pepper.models.analytics import (
     StudyRecommendation,
 )
 
-DOMAIN_WEIGHTS = {1: 0.12, 2: 0.22, 3: 0.18, 4: 0.28, 5: 0.20}
 PASSING_SCORE = 750
 MAX_SCORE = 900
 WEAK_AREA_THRESHOLD = 0.70
 
 
 async def get_domain_accuracies(
-    session: AsyncSession, user_id: int
+    session: AsyncSession,
+    user_id: int,
+    cert_id: int | None = None,
 ) -> dict[int, tuple[float, int]]:
     """Return {domain_number: (accuracy, attempt_count)} from all-time attempts."""
+    if cert_id is None:
+        from cert_pepper.db.exams import resolve_cert_id
+        cert_id = await resolve_cert_id(session)
+
     result = await session.execute(
         text("""
             SELECT d.number,
@@ -37,9 +42,10 @@ async def get_domain_accuracies(
             JOIN questions q ON q.id = qa.question_id
             JOIN domains d ON d.id = q.domain_id
             WHERE qa.user_id = :user_id
+            AND d.certification_id = :cert_id
             GROUP BY d.number
         """),
-        {"user_id": user_id},
+        {"user_id": user_id, "cert_id": cert_id},
     )
     rows = result.fetchall()
     return {
@@ -48,27 +54,37 @@ async def get_domain_accuracies(
     }
 
 
-async def predict_score(session: AsyncSession, user_id: int) -> PredictedScore:
+async def predict_score(
+    session: AsyncSession,
+    user_id: int,
+    cert_id: int | None = None,
+) -> PredictedScore:
     """Calculate predicted exam score and pass probability."""
-    accuracies = await get_domain_accuracies(session, user_id)
+    if cert_id is None:
+        from cert_pepper.db.exams import resolve_cert_id
+        cert_id = await resolve_cert_id(session)
 
-    d_acc = {i: accuracies.get(i, (0.0, 0))[0] for i in range(1, 6)}
+    # Read domain weights from DB
+    result = await session.execute(
+        text("SELECT number, weight_pct FROM domains WHERE certification_id = :cert_id"),
+        {"cert_id": cert_id},
+    )
+    db_weights = {row[0]: row[1] / 100.0 for row in result.fetchall()}
+
+    accuracies = await get_domain_accuracies(session, user_id, cert_id=cert_id)
+    d_acc = {num: accuracies.get(num, (0.0, 0))[0] for num in db_weights}
 
     # Weighted accuracy
-    weighted = sum(d_acc[i] * DOMAIN_WEIGHTS[i] for i in range(1, 6))
+    weighted = sum(d_acc.get(i, 0.0) * db_weights[i] for i in db_weights)
     predicted = round(weighted * MAX_SCORE)
 
     # Pass probability: logistic sigmoid centered on passing_score
-    # P(pass) = 1 / (1 + exp(-(predicted - 750) / 50))
     k = 50  # steepness: 50 points spans ~80% of the sigmoid
     pass_prob = 1.0 / (1.0 + math.exp(-(predicted - PASSING_SCORE) / k))
 
     return PredictedScore(
-        d1_accuracy=d_acc[1],
-        d2_accuracy=d_acc[2],
-        d3_accuracy=d_acc[3],
-        d4_accuracy=d_acc[4],
-        d5_accuracy=d_acc[5],
+        domain_accuracies=d_acc,
+        domain_weights=db_weights,
         predicted_score=predicted,
         pass_probability=pass_prob,
     )
@@ -78,8 +94,13 @@ async def get_weak_areas(
     session: AsyncSession,
     user_id: int,
     threshold: float = WEAK_AREA_THRESHOLD,
+    cert_id: int | None = None,
 ) -> list[WeakArea]:
     """Return domains below threshold, sorted by priority (weight × weakness)."""
+    if cert_id is None:
+        from cert_pepper.db.exams import resolve_cert_id
+        cert_id = await resolve_cert_id(session)
+
     result = await session.execute(
         text("""
             SELECT d.number, d.name, d.weight_pct,
@@ -89,9 +110,10 @@ async def get_weak_areas(
             JOIN questions q ON q.id = qa.question_id
             JOIN domains d ON d.id = q.domain_id
             WHERE qa.user_id = :user_id
+            AND d.certification_id = :cert_id
             GROUP BY d.number, d.name, d.weight_pct
         """),
-        {"user_id": user_id},
+        {"user_id": user_id, "cert_id": cert_id},
     )
     rows = result.fetchall()
 
@@ -112,16 +134,15 @@ async def get_weak_areas(
                 )
             )
 
-    # Also include domains with no attempts
+    # Also include domains with no attempts (from DB)
     attempted_domains = {row[0] for row in rows}
-    domain_names = {
-        1: ("General Security Concepts", 12.0),
-        2: ("Threats, Vulnerabilities, and Mitigations", 22.0),
-        3: ("Security Architecture", 18.0),
-        4: ("Security Operations", 28.0),
-        5: ("Program Management and Oversight", 20.0),
-    }
-    for num, (name, weight) in domain_names.items():
+    result = await session.execute(
+        text("SELECT number, name, weight_pct FROM domains WHERE certification_id = :cert_id"),
+        {"cert_id": cert_id},
+    )
+    all_domains = result.fetchall()
+    for drow in all_domains:
+        num, name, weight = drow
         if num not in attempted_domains:
             weak.append(
                 WeakArea(
@@ -141,9 +162,10 @@ async def get_recommendations(
     session: AsyncSession,
     user_id: int,
     days_remaining: int = 10,
+    cert_id: int | None = None,
 ) -> list[StudyRecommendation]:
     """Generate prioritized study recommendations."""
-    weak_areas = await get_weak_areas(session, user_id)
+    weak_areas = await get_weak_areas(session, user_id, cert_id=cert_id)
 
     recommendations = []
     total_priority = sum(w.priority_score for w in weak_areas) or 1.0

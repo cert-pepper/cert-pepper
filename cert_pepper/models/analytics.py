@@ -13,25 +13,38 @@ class WeakArea(BaseModel):
 
 
 class PredictedScore(BaseModel):
-    d1_accuracy: float = 0.0
-    d2_accuracy: float = 0.0
-    d3_accuracy: float = 0.0
-    d4_accuracy: float = 0.0
-    d5_accuracy: float = 0.0
+    domain_accuracies: dict[int, float] = {}
+    domain_weights: dict[int, float] = {}
     predicted_score: int = 0
     pass_probability: float = 0.0
 
+    # Backward-compat shim properties (used by existing MCP / CLI code)
+    @property
+    def d1_accuracy(self) -> float:
+        return self.domain_accuracies.get(1, 0.0)
+
+    @property
+    def d2_accuracy(self) -> float:
+        return self.domain_accuracies.get(2, 0.0)
+
+    @property
+    def d3_accuracy(self) -> float:
+        return self.domain_accuracies.get(3, 0.0)
+
+    @property
+    def d4_accuracy(self) -> float:
+        return self.domain_accuracies.get(4, 0.0)
+
+    @property
+    def d5_accuracy(self) -> float:
+        return self.domain_accuracies.get(5, 0.0)
+
     @property
     def weighted_accuracy(self) -> float:
-        weights = [0.12, 0.22, 0.18, 0.28, 0.20]
-        accuracies = [
-            self.d1_accuracy,
-            self.d2_accuracy,
-            self.d3_accuracy,
-            self.d4_accuracy,
-            self.d5_accuracy,
-        ]
-        return sum(w * a for w, a in zip(weights, accuracies))
+        return sum(
+            self.domain_accuracies.get(d, 0.0) * w
+            for d, w in self.domain_weights.items()
+        )
 
 
 class StudyRecommendation(BaseModel):

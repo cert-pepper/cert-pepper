@@ -52,18 +52,74 @@ async def db(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 # Data-seeding helpers (used by multiple test modules)
 # ---------------------------------------------------------------------------
 
+async def seed_certification(
+    session,
+    code: str,
+    name: str = "Test Exam",
+    vendor: str = "Vendor",
+) -> int:
+    """Insert a certification (if not exists) and return its id."""
+    await session.execute(
+        text(
+            "INSERT OR IGNORE INTO certifications (code, name, vendor) "
+            "VALUES (:code, :name, :vendor)"
+        ),
+        {"code": code, "name": name, "vendor": vendor},
+    )
+    result = await session.execute(
+        text("SELECT id FROM certifications WHERE code = :code"),
+        {"code": code},
+    )
+    return result.scalar()
+
+
+async def seed_domains_for_cert(
+    session,
+    cert_id: int,
+    domains: list[tuple[int, str, float]] | None = None,
+) -> None:
+    """Insert domains for a cert. domains = [(number, name, weight_pct), ...]"""
+    if domains is None:
+        domains = [(1, "Domain One", 100.0)]
+    for number, name, weight in domains:
+        await session.execute(
+            text(
+                "INSERT OR IGNORE INTO domains "
+                "(certification_id, number, name, weight_pct) "
+                "VALUES (:cid, :num, :name, :w)"
+            ),
+            {"cid": cert_id, "num": number, "name": name, "w": weight},
+        )
+
+
+async def get_cert_id(session, code: str = "SY0-701") -> int:
+    """Return the id of a certification by code."""
+    result = await session.execute(
+        text("SELECT id FROM certifications WHERE code = :code"),
+        {"code": code},
+    )
+    return result.scalar()
+
+
 async def seed_question(
     session,
     domain_number: int = 4,
     number: int = 1,
     stem: str = "Test question?",
     correct_answer: str = "A",
+    cert_id: int | None = None,
 ) -> int:
     """Insert a minimal question and return its id."""
-    result = await session.execute(
-        text("SELECT id FROM domains WHERE number = :n"),
-        {"n": domain_number},
-    )
+    if cert_id is not None:
+        result = await session.execute(
+            text("SELECT id FROM domains WHERE number = :n AND certification_id = :c"),
+            {"n": domain_number, "c": cert_id},
+        )
+    else:
+        result = await session.execute(
+            text("SELECT id FROM domains WHERE number = :n"),
+            {"n": domain_number},
+        )
     domain_id = result.scalar()
     assert domain_id is not None, f"Domain {domain_number} not found — was init_db called?"
 

@@ -1,6 +1,25 @@
-"""Content models: Question, Flashcard, Acronym, Domain."""
+"""Content models: Question, Flashcard, Acronym, Domain, ExamConfig."""
 
 from pydantic import BaseModel, Field
+
+
+class ExamDomain(BaseModel):
+    """A domain entry in exam.yaml."""
+
+    number: int
+    name: str
+    weight_pct: float
+
+
+class ExamConfig(BaseModel):
+    """Top-level exam.yaml model."""
+
+    code: str
+    name: str
+    vendor: str = ""
+    passing_score: int = 750
+    max_score: int = 900
+    domains: list[ExamDomain]
 
 
 class Domain(BaseModel):

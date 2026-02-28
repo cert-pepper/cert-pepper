@@ -19,15 +19,6 @@ from cert_pepper.models.content import Question
 
 console = Console()
 
-DOMAIN_NAMES = {
-    1: "General Security Concepts",
-    2: "Threats, Vulnerabilities & Mitigations",
-    3: "Security Architecture",
-    4: "Security Operations",
-    5: "Program Management & Oversight",
-}
-DOMAIN_WEIGHTS = {1: 0.12, 2: 0.22, 3: 0.18, 4: 0.28, 5: 0.20}
-
 
 async def get_question(session, question_id: int) -> Question | None:
     result = await session.execute(
@@ -57,13 +48,16 @@ def format_time(seconds: int) -> str:
     return f"{m:02d}:{s:02d}"
 
 
-async def run_exam(total_questions: int = 90, time_limit_minutes: int = 90) -> None:
+async def run_exam(
+    total_questions: int = 90,
+    time_limit_minutes: int = 90,
+    exam_code: str | None = None,
+) -> None:
     """Run a timed mock exam."""
     console.print()
     console.print(
         Panel(
             f"[bold cyan]cert-pepper Mock Exam[/bold cyan]\n\n"
-            f"Security+ SY0-701 Simulation\n"
             f"{total_questions} questions | {time_limit_minutes} minutes\n\n"
             f"[yellow]Press Q at any question to end the exam early.[/yellow]",
             border_style="cyan",
@@ -84,8 +78,27 @@ async def run_exam(total_questions: int = 90, time_limit_minutes: int = 90) -> N
             return
         user_id = row[0]
 
+        # Resolve certification
+        from cert_pepper.db.exams import resolve_cert_id
+        try:
+            cert_id = await resolve_cert_id(session, exam_code)
+        except ValueError as e:
+            console.print(f"[red]{e}[/red]")
+            return
+
+        # Fetch domain names and weights from DB
+        result = await session.execute(
+            text("SELECT number, name, weight_pct FROM domains WHERE certification_id = :cid ORDER BY number"),
+            {"cid": cert_id},
+        )
+        domain_rows = result.fetchall()
+        domain_names = {row[0]: row[1] for row in domain_rows}
+        domain_weights = {row[0]: row[2] / 100.0 for row in domain_rows}
+
         # Select exam questions proportionally
-        question_ids = await selector.select_exam_questions(session, user_id, total=total_questions)
+        question_ids = await selector.select_exam_questions(
+            session, user_id, total=total_questions, cert_id=cert_id
+        )
 
         if not question_ids:
             console.print("[red]No questions available. Run `cert-pepper ingest` first.[/red]")
@@ -96,8 +109,8 @@ async def run_exam(total_questions: int = 90, time_limit_minutes: int = 90) -> N
 
         # Create exam session
         await session.execute(
-            text("INSERT INTO study_sessions (user_id, session_type) VALUES (:uid, 'exam')"),
-            {"uid": user_id},
+            text("INSERT INTO study_sessions (user_id, session_type, certification_id) VALUES (:uid, 'exam', :cert_id)"),
+            {"uid": user_id, "cert_id": cert_id},
         )
         result = await session.execute(text("SELECT last_insert_rowid()"))
         session_id = result.fetchone()[0]
@@ -105,7 +118,8 @@ async def run_exam(total_questions: int = 90, time_limit_minutes: int = 90) -> N
         # Track answers
         answers: dict[int, str] = {}  # question_id → selected answer
         questions: dict[int, Question] = {}
-        domain_results: dict[int, list[bool]] = {i: [] for i in range(1, 6)}
+        domain_nums = sorted(domain_names.keys())
+        domain_results: dict[int, list[bool]] = {n: [] for n in domain_nums}
 
         start_time = time.time()
         time_limit_seconds = time_limit_minutes * 60
@@ -152,7 +166,8 @@ async def run_exam(total_questions: int = 90, time_limit_minutes: int = 90) -> N
                 if ans in ("A", "B", "C", "D"):
                     answers[q_id] = ans
                     is_correct = ans == q.correct_answer
-                    domain_results[q.domain_number].append(is_correct)
+                    if q.domain_number in domain_results:
+                        domain_results[q.domain_number].append(is_correct)
                     console.print(f"[dim]Recorded.[/dim]\n")
                     break
                 console.print("[red]Enter A, B, C, D, or Q.[/red]")
@@ -227,24 +242,26 @@ async def run_exam(total_questions: int = 90, time_limit_minutes: int = 90) -> N
     domain_table.add_column("Correct", justify="right")
     domain_table.add_column("Accuracy", justify="right")
 
-    for num in range(1, 6):
-        results = domain_results[num]
+    for num in sorted(domain_names.keys()):
+        name = domain_names.get(num, f"Domain {num}")
+        weight = domain_weights.get(num, 0.0)
+        results = domain_results.get(num, [])
         if results:
             d_correct = sum(results)
             d_total = len(results)
             d_acc = d_correct / d_total
             acc_color = "green" if d_acc >= 0.75 else "yellow" if d_acc >= 0.60 else "red"
             domain_table.add_row(
-                f"D{num}: {DOMAIN_NAMES[num][:30]}",
-                f"{DOMAIN_WEIGHTS[num]:.0%}",
+                f"D{num}: {name[:30]}",
+                f"{weight:.0%}",
                 str(d_total),
                 str(d_correct),
                 f"[{acc_color}]{d_acc:.0%}[/{acc_color}]",
             )
         else:
             domain_table.add_row(
-                f"D{num}: {DOMAIN_NAMES[num][:30]}",
-                f"{DOMAIN_WEIGHTS[num]:.0%}",
+                f"D{num}: {name[:30]}",
+                f"{weight:.0%}",
                 "0", "0", "[dim]—[/dim]",
             )
 
@@ -262,8 +279,9 @@ async def run_exam(total_questions: int = 90, time_limit_minutes: int = 90) -> N
             if results:
                 acc = sum(results) / len(results)
                 if acc < 0.75:
+                    name = domain_names.get(num, f"Domain {num}")
                     console.print(
-                        f"  • Domain {num}: {DOMAIN_NAMES[num]} — {acc:.0%} accuracy"
+                        f"  • Domain {num}: {name} — {acc:.0%} accuracy"
                     )
 
     console.print()

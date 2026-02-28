@@ -60,18 +60,35 @@ async def _get_question(session, question_id: int) -> Question | None:
 
 
 @mcp.tool()
-async def start_session(session_type: str = "study", domain_filter: int | None = None) -> str:
+async def start_session(
+    session_type: str = "study",
+    domain_filter: int | None = None,
+    exam_code: str | None = None,
+) -> str:
     """Start a new study session. Returns session_id."""
     from sqlalchemy import text
+    from cert_pepper.db.exams import resolve_cert_id
 
     async with get_session() as db:
         user_id = await _get_user_id(db)
+        try:
+            cert_id = await resolve_cert_id(db, exam_code)
+        except ValueError as e:
+            return json.dumps({"error": str(e)})
+
+        # Get the exam code to return
+        result = await db.execute(
+            text("SELECT code FROM certifications WHERE id = :cid"),
+            {"cid": cert_id},
+        )
+        cert_code = result.scalar() or exam_code
+
         await db.execute(
             text(
-                "INSERT INTO study_sessions (user_id, session_type, domain_filter)"
-                " VALUES (:uid, :type, :domain)"
+                "INSERT INTO study_sessions (user_id, session_type, domain_filter, certification_id)"
+                " VALUES (:uid, :type, :domain, :cert_id)"
             ),
-            {"uid": user_id, "type": session_type, "domain": domain_filter},
+            {"uid": user_id, "type": session_type, "domain": domain_filter, "cert_id": cert_id},
         )
         result = await db.execute(text("SELECT last_insert_rowid()"))
         session_db_id = result.fetchone()[0]
@@ -81,6 +98,7 @@ async def start_session(session_type: str = "study", domain_filter: int | None =
         "db_id": session_db_id,
         "type": session_type,
         "domain_filter": domain_filter,
+        "cert_id": cert_id,
         "questions_seen": 0,
         "questions_correct": 0,
         "started_at": datetime.utcnow().isoformat(),
@@ -90,6 +108,7 @@ async def start_session(session_type: str = "study", domain_filter: int | None =
         "session_id": session_id,
         "session_type": session_type,
         "domain_filter": domain_filter,
+        "exam_code": cert_code,
         "message": "Study session started. Use get_next_question to begin.",
     })
 
@@ -99,10 +118,13 @@ async def get_next_question(session_id: str) -> str:
     """Get the next question for a study session. Uses adaptive selection."""
     sess = _sessions.get(session_id, {})
     domain_filter = sess.get("domain_filter")
+    cert_id = sess.get("cert_id")
 
     async with get_session() as db:
         user_id = await _get_user_id(db)
-        question_id = await selector.select_question(db, user_id, domain_filter=domain_filter)
+        question_id = await selector.select_question(
+            db, user_id, domain_filter=domain_filter, cert_id=cert_id
+        )
 
         if question_id is None:
             return json.dumps({"error": "No questions available. Try running cert-pepper ingest first."})
@@ -243,24 +265,41 @@ async def submit_answer(
 
 
 @mcp.tool()
-async def get_due_cards(limit: int = 20) -> str:
+async def get_due_cards(limit: int = 20, exam_code: str | None = None) -> str:
     """Get FSRS cards due for review today."""
     from sqlalchemy import text
 
     async with get_session() as db:
         user_id = await _get_user_id(db)
-        result = await db.execute(
-            text("""
-                SELECT fc.content_id, fc.state, fc.due_date, fc.stability,
-                       fc.difficulty, fc.reps, q.stem
-                FROM fsrs_cards fc
-                JOIN questions q ON q.id = fc.content_id AND fc.content_type='question'
-                WHERE fc.user_id=:uid AND fc.due_date <= CURRENT_TIMESTAMP
-                ORDER BY fc.due_date ASC
-                LIMIT :limit
-            """),
-            {"uid": user_id, "limit": limit},
-        )
+
+        if exam_code:
+            result = await db.execute(
+                text("""
+                    SELECT fc.content_id, fc.state, fc.due_date, fc.stability,
+                           fc.difficulty, fc.reps, q.stem
+                    FROM fsrs_cards fc
+                    JOIN questions q ON q.id = fc.content_id AND fc.content_type='question'
+                    JOIN domains d ON d.id = q.domain_id
+                    JOIN certifications c ON c.id = d.certification_id AND c.code = :exam_code
+                    WHERE fc.user_id=:uid AND fc.due_date <= CURRENT_TIMESTAMP
+                    ORDER BY fc.due_date ASC
+                    LIMIT :limit
+                """),
+                {"uid": user_id, "limit": limit, "exam_code": exam_code},
+            )
+        else:
+            result = await db.execute(
+                text("""
+                    SELECT fc.content_id, fc.state, fc.due_date, fc.stability,
+                           fc.difficulty, fc.reps, q.stem
+                    FROM fsrs_cards fc
+                    JOIN questions q ON q.id = fc.content_id AND fc.content_type='question'
+                    WHERE fc.user_id=:uid AND fc.due_date <= CURRENT_TIMESTAMP
+                    ORDER BY fc.due_date ASC
+                    LIMIT :limit
+                """),
+                {"uid": user_id, "limit": limit},
+            )
         rows = result.fetchall()
 
     cards = [
@@ -343,11 +382,16 @@ async def daily_progress() -> str:
 @mcp.resource("progress://weak-areas")
 async def weak_areas() -> str:
     """Domains below 70% accuracy."""
+    from cert_pepper.db.exams import resolve_cert_id
     from cert_pepper.engine.scorer import get_weak_areas
 
     async with get_session() as db:
         user_id = await _get_user_id(db)
-        weak = await get_weak_areas(db, user_id)
+        try:
+            cert_id = await resolve_cert_id(db)
+        except ValueError:
+            cert_id = None
+        weak = await get_weak_areas(db, user_id, cert_id=cert_id)
 
     data = [
         {
