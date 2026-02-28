@@ -308,6 +308,227 @@ async def acronym_list() -> str:
     return json.dumps(data)
 
 
+_BATCHES_PER_DOMAIN = 3
+_QUESTIONS_PER_BATCH = 30
+
+_EXAM_CONFIG_SYSTEM = """\
+You are a certification exam expert. Return ONLY valid JSON with no markdown fencing, \
+no extra commentary — just the raw JSON object.\
+"""
+
+_EXAM_CONFIG_USER = """\
+Return a JSON object for the certification exam: "{exam_name}"
+
+Required fields:
+  code          — short exam code (e.g. "SY0-701", "CISSP")
+  name          — full official exam name
+  vendor        — issuing organisation (e.g. "CompTIA", "ISC2", "AWS")
+  passing_score — integer passing score (e.g. 750)
+  max_score     — integer maximum score (e.g. 900)
+  domains       — array of objects, each with:
+                    number     (int, starting at 1)
+                    name       (string)
+                    weight_pct (float, weights must sum to exactly 100.0)
+
+Return nothing but the JSON object.\
+"""
+
+_QUESTIONS_SYSTEM = """\
+You are a certification exam question writer. Generate EXACTLY {n} questions in \
+this markdown format (copy the structure precisely):
+
+**Q{{number}}.** Question stem here?
+
+A) Option A
+B) Option B
+C) Option C
+D) Option D
+
+<details><summary>Answer</summary>
+
+**X) Correct option text**
+
+Explanation of why X is correct and why the distractors are wrong.
+
+</details>
+
+---
+
+Rules:
+- Exactly 4 options labelled A) through D).
+- Exactly 1 correct answer per question.
+- A `---` separator between questions but NOT after the last one.
+- Number questions consecutively starting at the number given in the prompt.
+- Questions must test application/analysis (exam-difficulty), not just recall.\
+"""
+
+_QUESTIONS_USER = """\
+Generate {n} practice questions (Q{start} through Q{end}) for:
+  Exam:   {exam_name}
+  Domain {domain_number}: {domain_name} ({weight_pct}% of exam)
+
+Focus on realistic exam-difficulty scenarios covering the full breadth of this domain.\
+"""
+
+
+def _strip_json_fences(text: str) -> str:
+    """Remove optional ```json … ``` fences an LLM may wrap around JSON."""
+    text = text.strip()
+    if text.startswith("```"):
+        lines = text.splitlines()
+        # drop first line (```json or ```) and last line (```)
+        text = "\n".join(lines[1:-1]).strip()
+    return text
+
+
+@mcp.tool()
+async def setup_exam(exam_name: str, ctx: Context) -> str:
+    """Prepare a full question bank for an exam.
+
+    Checks if the exam already exists in the DB. If it does, returns a
+    ready status with question count. If not, uses MCP sampling to:
+    1. Generate the exam structure (code, name, vendor, domains + weights)
+    2. Generate ~90 practice questions per domain in batches of 30
+    3. Insert everything into the DB
+
+    exam_name: Natural language exam name, e.g. "CompTIA Security+ SY0-701",
+               "CISSP", "AWS Solutions Architect Associate"
+    """
+    from sqlalchemy import text as sql_text
+
+    from cert_pepper.ingestion.loader import ingest_exam_config, ingest_questions
+    from cert_pepper.ingestion.questions import parse_questions_text
+    from cert_pepper.models.content import ExamConfig, ExamDomain
+
+    q = f"%{exam_name}%"
+
+    async with get_session() as db:
+        # ── Check for existing exam ──────────────────────────────────────────
+        result = await db.execute(
+            sql_text(
+                "SELECT id, code, name FROM certifications "
+                "WHERE LOWER(code) LIKE LOWER(:q) OR LOWER(name) LIKE LOWER(:q)"
+            ),
+            {"q": q},
+        )
+        row = result.fetchone()
+
+        if row:
+            cert_id, exam_code, exam_full_name = row[0], row[1], row[2]
+            count_result = await db.execute(
+                sql_text(
+                    "SELECT COUNT(*) FROM questions qst "
+                    "JOIN domains d ON qst.domain_id = d.id "
+                    "WHERE d.certification_id = :cert_id"
+                ),
+                {"cert_id": cert_id},
+            )
+            question_count = count_result.scalar() or 0
+            return json.dumps({
+                "status": "ready",
+                "exam_code": exam_code,
+                "exam_name": exam_full_name,
+                "question_count": question_count,
+            })
+
+    # ── Exam not found — generate via MCP sampling ───────────────────────────
+
+    # Step 1: generate exam config
+    config_result = await ctx.session.create_message(
+        messages=[
+            SamplingMessage(
+                role="user",
+                content=TextContent(
+                    type="text",
+                    text=_EXAM_CONFIG_USER.format(exam_name=exam_name),
+                ),
+            )
+        ],
+        system_prompt=_EXAM_CONFIG_SYSTEM,
+        max_tokens=1024,
+    )
+    raw_json = _strip_json_fences(
+        config_result.content.text
+        if hasattr(config_result.content, "text")
+        else str(config_result.content)
+    )
+
+    try:
+        config_data = json.loads(raw_json)
+    except json.JSONDecodeError as exc:
+        return json.dumps({"error": f"Failed to parse exam config JSON: {exc}", "raw": raw_json})
+
+    try:
+        exam_config = ExamConfig(
+            code=config_data["code"],
+            name=config_data["name"],
+            vendor=config_data.get("vendor", ""),
+            passing_score=int(config_data.get("passing_score", 750)),
+            max_score=int(config_data.get("max_score", 900)),
+            domains=[
+                ExamDomain(
+                    number=int(d["number"]),
+                    name=d["name"],
+                    weight_pct=float(d["weight_pct"]),
+                )
+                for d in config_data.get("domains", [])
+            ],
+        )
+    except (KeyError, TypeError, ValueError) as exc:
+        return json.dumps({"error": f"Invalid exam config structure: {exc}", "raw": raw_json})
+
+    # Step 2: insert config, then generate questions domain by domain
+    total_inserted = 0
+    async with get_session() as db:
+        cert_id = await ingest_exam_config(db, exam_config)
+
+        for domain in exam_config.domains:
+            for batch_idx in range(_BATCHES_PER_DOMAIN):
+                start = batch_idx * _QUESTIONS_PER_BATCH + 1
+                end = start + _QUESTIONS_PER_BATCH - 1
+
+                q_result = await ctx.session.create_message(
+                    messages=[
+                        SamplingMessage(
+                            role="user",
+                            content=TextContent(
+                                type="text",
+                                text=_QUESTIONS_USER.format(
+                                    n=_QUESTIONS_PER_BATCH,
+                                    start=start,
+                                    end=end,
+                                    exam_name=exam_config.name,
+                                    domain_number=domain.number,
+                                    domain_name=domain.name,
+                                    weight_pct=domain.weight_pct,
+                                ),
+                            ),
+                        )
+                    ],
+                    system_prompt=_QUESTIONS_SYSTEM.format(n=_QUESTIONS_PER_BATCH),
+                    max_tokens=8192,
+                )
+                raw_text = (
+                    q_result.content.text
+                    if hasattr(q_result.content, "text")
+                    else str(q_result.content)
+                )
+                parsed = parse_questions_text(raw_text, domain_number=domain.number)
+                inserted = await ingest_questions(db, parsed, cert_id=cert_id)
+                total_inserted += inserted
+
+    return json.dumps({
+        "status": "created",
+        "exam_code": exam_config.code,
+        "exam_name": exam_config.name,
+        "question_count": total_inserted,
+        "domains": [
+            {"number": d.number, "name": d.name, "weight_pct": d.weight_pct}
+            for d in exam_config.domains
+        ],
+    })
+
+
 def serve() -> None:
     """Entry point for the content MCP server (stdio transport)."""
     import asyncio

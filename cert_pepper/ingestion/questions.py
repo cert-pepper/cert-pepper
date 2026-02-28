@@ -21,21 +21,14 @@ _ANSWER = re.compile(r"<details><summary>Answer</summary>\s*\*\*([A-D])[).][^*]*
 _DOMAIN_NUM = re.compile(r"domain(\d+)", re.IGNORECASE)
 
 
-def parse_questions_file(path: Path) -> list[ParsedQuestion]:
-    """Parse a single domain practice file and return ParsedQuestion list."""
-    text = path.read_text(encoding="utf-8")
-    filename = path.name
-
-    # Get domain number from filename
-    m = _DOMAIN_NUM.search(filename)
-    if not m:
-        raise ValueError(f"Cannot determine domain number from filename: {filename}")
-    domain_number = int(m.group(1))
-
+def _parse_questions_content(
+    content: str, domain_number: int, source_file: str
+) -> list[ParsedQuestion]:
+    """Parse question markdown content into ParsedQuestion list."""
     questions: list[ParsedQuestion] = []
 
     # Split on horizontal rules to get question blocks
-    blocks = re.split(r"\n---\n", text)
+    blocks = re.split(r"\n---\n", content)
 
     for block in blocks:
         block = block.strip()
@@ -108,11 +101,34 @@ def parse_questions_file(path: Path) -> list[ParsedQuestion]:
                 option_d=options.get("D", ""),
                 correct_answer=correct_answer,
                 explanation=explanation,
-                source_file=filename,
+                source_file=source_file,
             )
         )
 
     return questions
+
+
+def parse_questions_file(path: Path) -> list[ParsedQuestion]:
+    """Parse a single domain practice file and return ParsedQuestion list."""
+    content = path.read_text(encoding="utf-8")
+    filename = path.name
+
+    # Get domain number from filename
+    m = _DOMAIN_NUM.search(filename)
+    if not m:
+        raise ValueError(f"Cannot determine domain number from filename: {filename}")
+    domain_number = int(m.group(1))
+
+    return _parse_questions_content(content, domain_number, filename)
+
+
+def parse_questions_text(text: str, domain_number: int) -> list[ParsedQuestion]:
+    """Parse question markdown text (not a file) and return ParsedQuestion list.
+
+    Unlike parse_questions_file(), the domain_number is supplied explicitly
+    (there is no filename to derive it from). source_file is set to "generated".
+    """
+    return _parse_questions_content(text, domain_number, "generated")
 
 
 def parse_all_questions(questions_dir: Path) -> list[ParsedQuestion]:
