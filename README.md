@@ -13,7 +13,7 @@ cert-pepper ingests your exam content (questions, flashcards, acronyms) into SQL
 ```bash
 git clone https://github.com/crook3dfingers/cert-pepper.git
 cd cert-pepper
-cp .env.example .env          # add ANTHROPIC_API_KEY if you want AI explanations
+cp .env.example .env          # add ANTHROPIC_API_KEY for AI explanations in CLI study sessions
 uv sync
 uv run cert-pepper db init
 uv run cert-pepper ingest     # reads examples/security-plus/ by default
@@ -47,6 +47,8 @@ Three STDIO MCP servers are registered in `.mcp.json`. After `uv sync` they are 
 
 Enable them in Claude Code by adding `enableAllProjectMcpServers: true` to `.claude/settings.local.json`, then open a new session in this repo.
 
+The `get_explanation` MCP tool generates AI explanations via MCP sampling — no `ANTHROPIC_API_KEY` required when using Claude Code.
+
 Test a server directly:
 ```bash
 echo '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | .venv/bin/cert-pepper-study-mcp
@@ -70,7 +72,7 @@ The Security+ content in `examples/security-plus/` is a complete reference imple
 |----------|---------|-------------|
 | `DB_PATH` | `./cert_pepper.db` | SQLite database path |
 | `CONTENT_ROOT` | `./examples/security-plus` | Root of your exam content |
-| `ANTHROPIC_API_KEY` | — | Required for AI explanations |
+| `ANTHROPIC_API_KEY` | — | Required for CLI AI explanations (`study`, `pregenerate`). Not needed when using MCP tools from Claude Code. |
 | `HAIKU_MODEL` | `claude-haiku-4-5-20251001` | Model for AI explanations |
 | `SONNET_MODEL` | `claude-sonnet-4-6` | Model for MCP sampling |
 | `DEFAULT_SESSION_SIZE` | `10` | Questions per study session |

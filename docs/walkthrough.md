@@ -75,7 +75,7 @@ uv run cert-pepper study --domain 1 --count 10
 
 During each session:
 - The adaptive selector presents unseen questions first, then repeats questions you got wrong sooner.
-- If ANTHROPIC_API_KEY is set, wrong answers trigger an AI explanation from Claude.
+- Wrong answers trigger an AI explanation from Claude. If `ANTHROPIC_API_KEY` is set, the CLI generates it directly. When using the MCP tools in Claude Code, explanations work without an API key.
 - After each session, check `progress` to see which domains are weakest.
 
 ```bash
@@ -120,7 +120,7 @@ Enable MCP servers in `.claude/settings.local.json`:
 Open a new Claude Code session in the repo, then use the tools:
 
 - **`search_questions`** — find questions on a specific topic ("What questions cover PKI?")
-- **`get_explanation`** — get an AI explanation for any question
+- **`get_explanation`** — get an AI explanation for any question (no API key required; uses MCP sampling via Claude Code)
 - **`lookup_acronym`** — look up any acronym instantly
 - **`get_study_recommendations`** — prioritized topics given days remaining
 
@@ -191,5 +191,5 @@ The predicted score is calculated as: `Σ(domain_accuracy × domain_weight) × 9
 ## What's Next
 
 - Add more practice questions to underrepresented domains (Domains 3 and 5 have none yet).
-- Run `cert-pepper pregenerate` to cache AI explanations for all questions (requires API key).
+- Run `cert-pepper pregenerate` to pre-cache AI explanations for all wrong-answer combinations (requires `ANTHROPIC_API_KEY`). Skip this if you're using Claude Code — the `get_explanation` MCP tool generates explanations on demand without an API key.
 - Use `exam` for a second mock run the morning of the exam.
