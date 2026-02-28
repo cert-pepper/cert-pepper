@@ -7,7 +7,6 @@ from pathlib import Path
 
 from cert_pepper.models.content import ParsedAcronym
 
-
 # Matches table rows: | AAA | Authentication, Authorization, Accounting |
 _TABLE_ROW = re.compile(r"^\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|")
 

@@ -130,7 +130,8 @@ def _build_user_message(question: Question, selected_answer: str) -> str:
         f"Question: {question.stem}\n\n"
         f"{options_text}\n\n"
         f"The student selected: {selected_answer}) {question.get_option(selected_answer)}\n"
-        f"The correct answer is: {question.correct_answer}) {question.get_option(question.correct_answer)}\n\n"
+        f"The correct answer is: {question.correct_answer}) "
+        f"{question.get_option(question.correct_answer)}\n\n"
         f"Explain why the student's answer is wrong and why the correct answer is right."
     )
 

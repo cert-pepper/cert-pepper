@@ -1,6 +1,6 @@
 """Content models: Question, Flashcard, Acronym, Domain, ExamConfig."""
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 
 class ExamDomain(BaseModel):

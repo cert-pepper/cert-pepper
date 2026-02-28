@@ -11,6 +11,7 @@ from typing import Any
 
 from mcp.server.fastmcp import Context, FastMCP
 from mcp.types import SamplingMessage, TextContent
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from cert_pepper.db.connection import get_session, init_db
 from cert_pepper.models.content import Question
@@ -18,7 +19,7 @@ from cert_pepper.models.content import Question
 mcp = FastMCP("cert-pepper-content")
 
 
-async def _load_question(db, question_id: int) -> Question | None:
+async def _load_question(db: AsyncSession, question_id: int) -> Question | None:
     from sqlalchemy import text
 
     result = await db.execute(
@@ -52,7 +53,9 @@ async def _load_question(db, question_id: int) -> Question | None:
 
 
 @mcp.tool()
-async def get_explanation(question_id: int, selected_answer: str, ctx: Context) -> str:
+async def get_explanation(
+    question_id: int, selected_answer: str, ctx: Context[Any, Any, Any]
+) -> str:
     """Get an AI explanation for a question answer.
 
     Checks DB cache first. On cache miss, uses MCP sampling to generate the
@@ -109,7 +112,9 @@ async def get_explanation(question_id: int, selected_answer: str, ctx: Context) 
                 max_tokens=512,
             )
             content_block = result.content
-            explanation = content_block.text if hasattr(content_block, "text") else str(content_block)
+            explanation = (
+                content_block.text if hasattr(content_block, "text") else str(content_block)
+            )
             source = "mcp-sampling"
 
             # Store in DB cache
@@ -244,7 +249,9 @@ async def get_flashcard(flashcard_id: int) -> str:
         if not row:
             return json.dumps({"error": "Flashcard not found"})
 
-    return json.dumps({"id": row[0], "category": row[1], "front": row[2], "back": row[3], "tip": row[4]})
+    return json.dumps(
+        {"id": row[0], "category": row[1], "front": row[2], "back": row[3], "tip": row[4]}
+    )
 
 
 @mcp.tool()
@@ -382,7 +389,7 @@ def _strip_json_fences(text: str) -> str:
 
 
 @mcp.tool()
-async def setup_exam(exam_name: str, ctx: Context) -> str:
+async def setup_exam(exam_name: str, ctx: Context[Any, Any, Any]) -> str:
     """Prepare a full question bank for an exam.
 
     Checks if the exam already exists in the DB. If it does, returns a

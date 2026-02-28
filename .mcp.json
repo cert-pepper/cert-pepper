@@ -2,27 +2,18 @@
   "mcpServers": {
     "cert-pepper-study": {
       "type": "stdio",
-      "command": "/home/ubuntu/github/cert-pepper/.venv/bin/cert-pepper-study-mcp",
-      "env": {
-        "DB_PATH": "/home/ubuntu/github/cert-pepper/cert_pepper.db",
-        "CONTENT_ROOT": "/home/ubuntu/github/cert-pepper/examples/security-plus"
-      }
+      "command": "uv",
+      "args": ["run", "cert-pepper-study-mcp"]
     },
     "cert-pepper-content": {
       "type": "stdio",
-      "command": "/home/ubuntu/github/cert-pepper/.venv/bin/cert-pepper-content-mcp",
-      "env": {
-        "DB_PATH": "/home/ubuntu/github/cert-pepper/cert_pepper.db",
-        "CONTENT_ROOT": "/home/ubuntu/github/cert-pepper/examples/security-plus"
-      }
+      "command": "uv",
+      "args": ["run", "cert-pepper-content-mcp"]
     },
     "cert-pepper-analytics": {
       "type": "stdio",
-      "command": "/home/ubuntu/github/cert-pepper/.venv/bin/cert-pepper-analytics-mcp",
-      "env": {
-        "DB_PATH": "/home/ubuntu/github/cert-pepper/cert_pepper.db",
-        "CONTENT_ROOT": "/home/ubuntu/github/cert-pepper/examples/security-plus"
-      }
+      "command": "uv",
+      "args": ["run", "cert-pepper-analytics-mcp"]
     }
   }
 }

@@ -7,7 +7,6 @@ from pathlib import Path
 
 from cert_pepper.models.content import ParsedFlashcard
 
-
 # Matches: ## Section Header
 _SECTION = re.compile(r"^##\s+(.+)$", re.MULTILINE)
 

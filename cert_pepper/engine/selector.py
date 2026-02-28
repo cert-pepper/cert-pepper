@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import random
 from datetime import datetime
+from typing import Any
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -48,7 +49,7 @@ async def select_question(
         from cert_pepper.db.exams import resolve_cert_id
         cert_id = await resolve_cert_id(session)
 
-    params: dict = {
+    params: dict[str, Any] = {
         "user_id": user_id,
         "now": now,
         "cert_id": cert_id,
@@ -74,7 +75,7 @@ async def select_question(
     )
     row = result.fetchone()
     if row:
-        return row[0]
+        return int(row[0])
 
     # 2. Due learning/relearning cards
     result = await session.execute(
@@ -95,7 +96,7 @@ async def select_question(
     )
     row = result.fetchone()
     if row:
-        return row[0]
+        return int(row[0])
 
     # 3. Unseen questions — weighted by domain priority
     result = await session.execute(
@@ -124,8 +125,8 @@ async def select_question(
         if total > 0:
             probs = [w / total for w in weights]
             chosen = random.choices([row[0] for row in rows], weights=probs, k=1)[0]
-            return chosen
-        return rows[0][0]
+            return int(chosen)
+        return int(rows[0][0])
 
     # 4. Anything — least recently attempted
     result = await session.execute(
@@ -143,7 +144,7 @@ async def select_question(
         params,
     )
     row = result.fetchone()
-    return row[0] if row else None
+    return int(row[0]) if row else None
 
 
 async def select_exam_questions(

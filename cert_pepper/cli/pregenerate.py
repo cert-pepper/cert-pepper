@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from rich.console import Console
-from rich.progress import Progress, SpinnerColumn, BarColumn, TextColumn
+from rich.progress import BarColumn, Progress, SpinnerColumn, TextColumn
 from rich.table import Table
 from sqlalchemy import text
 
@@ -15,7 +15,6 @@ console = Console()
 
 async def run_pregenerate(domain_filter: int | None = None) -> None:
     """Pre-generate AI explanations for all questions."""
-    from cert_pepper.ai.explainer import pregenerate_all
 
     console.print("[cyan]Pre-generating AI explanations...[/cyan]")
     console.print("[dim]This runs once and stores results in the DB.[/dim]\n")
@@ -49,8 +48,11 @@ async def run_pregenerate(domain_filter: int | None = None) -> None:
             console.print("[yellow]No questions found. Run `cert-pepper ingest` first.[/yellow]")
             return
 
-        console.print(f"Found [cyan]{len(questions)}[/cyan] questions. "
-                     f"Generating explanations for wrong answers (~{len(questions) * 3} API calls)...\n")
+        console.print(
+            f"Found [cyan]{len(questions)}[/cyan] questions. "
+            f"Generating explanations for wrong answers"
+            f" (~{len(questions) * 3} API calls)...\n"
+        )
 
         with Progress(
             SpinnerColumn(),
@@ -88,9 +90,13 @@ async def run_pregenerate(domain_filter: int | None = None) -> None:
 
         # Show cache stats
         result = await session.execute(
-            text("SELECT COUNT(*), SUM(tokens_used), SUM(cached) FROM ai_explanations WHERE content_type='question'")
+            text(
+                "SELECT COUNT(*), SUM(tokens_used), SUM(cached)"
+                " FROM ai_explanations WHERE content_type='question'"
+            )
         )
         stats = result.fetchone()
+        assert stats is not None
         total_expl = stats[0] or 0
         total_tokens = stats[1] or 0
         cache_hits = stats[2] or 0
@@ -103,4 +109,6 @@ async def run_pregenerate(domain_filter: int | None = None) -> None:
     table.add_row("Anthropic cache hits", str(cache_hits))
     table.add_row("Estimated cost", f"~${total_tokens / 1_000_000 * 3:.4f}")
     console.print(table)
-    console.print("\n[green]✓ All explanations pre-generated. Future sessions won't call the API.[/green]")
+    console.print(
+        "\n[green]✓ All explanations pre-generated. Future sessions won't call the API.[/green]"
+    )

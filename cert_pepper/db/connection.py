@@ -1,16 +1,16 @@
 """SQLAlchemy async engine and session factory."""
 
-from pathlib import Path
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from typing import AsyncIterator
+from pathlib import Path
 
-from sqlalchemy.ext.asyncio import (
-    AsyncSession,
-    AsyncEngine,
-    create_async_engine,
-    async_sessionmaker,
-)
 from sqlalchemy import text
+from sqlalchemy.ext.asyncio import (
+    AsyncEngine,
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
 
 from cert_pepper.config import get_settings
 
@@ -99,8 +99,10 @@ async def _run_migrations() -> None:
     migrations = [
         "ALTER TABLE flashcards ADD COLUMN certification_id INTEGER REFERENCES certifications(id)",
         "ALTER TABLE acronyms ADD COLUMN certification_id INTEGER REFERENCES certifications(id)",
-        "ALTER TABLE study_sessions ADD COLUMN certification_id INTEGER REFERENCES certifications(id)",
-        "ALTER TABLE predicted_scores ADD COLUMN certification_id INTEGER REFERENCES certifications(id)",
+        "ALTER TABLE study_sessions ADD COLUMN certification_id INTEGER"
+        " REFERENCES certifications(id)",
+        "ALTER TABLE predicted_scores ADD COLUMN certification_id INTEGER"
+        " REFERENCES certifications(id)",
     ]
     engine = get_engine()
     async with engine.begin() as conn:

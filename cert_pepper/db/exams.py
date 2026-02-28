@@ -25,7 +25,7 @@ async def resolve_cert_id(session: AsyncSession, exam_code: str | None = None) -
             raise ValueError(
                 f"Exam '{exam_code}' not found in database. Run cert-pepper ingest first."
             )
-        return row[0]
+        return int(row[0])
 
     result = await session.execute(text("SELECT id, code FROM certifications"))
     rows = result.fetchall()
@@ -34,7 +34,7 @@ async def resolve_cert_id(session: AsyncSession, exam_code: str | None = None) -
         raise ValueError("No exams found in database. Run cert-pepper ingest first.")
 
     if len(rows) == 1:
-        return rows[0][0]
+        return int(rows[0][0])
 
     codes = ", ".join(r[1] for r in rows)
     raise ValueError(

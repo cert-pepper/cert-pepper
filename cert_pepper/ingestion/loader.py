@@ -2,16 +2,14 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from cert_pepper.config import Settings
-from cert_pepper.ingestion.questions import parse_all_questions
-from cert_pepper.ingestion.flashcards import parse_flashcards
 from cert_pepper.ingestion.acronyms import parse_acronyms
-from cert_pepper.models.content import ExamConfig, ParsedQuestion, ParsedFlashcard, ParsedAcronym
+from cert_pepper.ingestion.flashcards import parse_flashcards
+from cert_pepper.ingestion.questions import parse_all_questions
+from cert_pepper.models.content import ExamConfig, ParsedAcronym, ParsedFlashcard, ParsedQuestion
 
 
 async def ingest_exam_config(session: AsyncSession, exam: ExamConfig) -> int:

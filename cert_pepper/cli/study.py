@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import time
 from datetime import datetime
 
@@ -12,10 +11,12 @@ from rich.prompt import Prompt
 from rich.table import Table
 from rich.text import Text
 from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from cert_pepper.db.connection import get_session
 from cert_pepper.engine import fsrs, selector
-from cert_pepper.engine.bkt import BKTParams, update as bkt_update
+from cert_pepper.engine.bkt import BKTParams
+from cert_pepper.engine.bkt import update as bkt_update
 from cert_pepper.models.content import Question
 
 console = Console()
@@ -28,17 +29,18 @@ RATING_LABELS = {
 }
 
 
-async def get_default_user_id(session) -> int:
+async def get_default_user_id(session: AsyncSession) -> int:
     result = await session.execute(text("SELECT id FROM users WHERE username='default' LIMIT 1"))
     row = result.fetchone()
     if row:
-        return row[0]
+        return int(row[0])
     await session.execute(text("INSERT OR IGNORE INTO users (username) VALUES ('default')"))
     result = await session.execute(text("SELECT id FROM users WHERE username='default' LIMIT 1"))
-    return result.fetchone()[0]
+    final_row = result.fetchone()
+    return int(final_row[0]) if final_row else 1
 
 
-async def get_question(session, question_id: int) -> Question | None:
+async def get_question(session: AsyncSession, question_id: int) -> Question | None:
     result = await session.execute(
         text("""
             SELECT q.id, q.domain_id, d.number, q.number, q.stem,
@@ -70,7 +72,9 @@ async def get_question(session, question_id: int) -> Question | None:
     )
 
 
-async def get_or_create_fsrs_card(session, user_id: int, question_id: int) -> fsrs.FSRSCard:
+async def get_or_create_fsrs_card(
+    session: AsyncSession, user_id: int, question_id: int
+) -> fsrs.FSRSCard:
     result = await session.execute(
         text("""
             SELECT stability, difficulty, retrievability, due_date,
@@ -96,7 +100,9 @@ async def get_or_create_fsrs_card(session, user_id: int, question_id: int) -> fs
     return fsrs.FSRSCard()
 
 
-async def save_fsrs_card(session, user_id: int, question_id: int, card: fsrs.FSRSCard) -> None:
+async def save_fsrs_card(
+    session: AsyncSession, user_id: int, question_id: int, card: fsrs.FSRSCard
+) -> None:
     await session.execute(
         text("""
             INSERT INTO fsrs_cards
@@ -130,7 +136,9 @@ async def save_fsrs_card(session, user_id: int, question_id: int, card: fsrs.FSR
     )
 
 
-async def update_bkt(session, user_id: int, domain_id: int, is_correct: bool) -> None:
+async def update_bkt(
+    session: AsyncSession, user_id: int, domain_id: int, is_correct: bool
+) -> None:
     result = await session.execute(
         text("""
             SELECT p_mastery, p_learn, p_guess, p_slip, attempts, correct
@@ -257,7 +265,7 @@ async def run_study_session(
             return
 
         # Create study session record
-        result = await session.execute(
+        await session.execute(
             text("""
                 INSERT INTO study_sessions (user_id, session_type, domain_filter, certification_id)
                 VALUES (:uid, 'study', :domain, :cert_id)
@@ -267,7 +275,8 @@ async def run_study_session(
         session_id_result = await session.execute(
             text("SELECT last_insert_rowid()")
         )
-        session_id = session_id_result.fetchone()[0]
+        id_row = session_id_result.fetchone()
+        session_id = int(id_row[0]) if id_row else 0
 
         correct_count = 0
         seen_count = 0
@@ -320,12 +329,13 @@ async def run_study_session(
 
             # Show result
             if is_correct:
-                console.print(f"\n[bold green]✓ Correct![/bold green]")
+                console.print("\n[bold green]✓ Correct![/bold green]")
                 correct_count += 1
             else:
                 console.print(
                     f"\n[bold red]✗ Incorrect.[/bold red] "
-                    f"The correct answer was [bold]{q.correct_answer}) {q.get_option(q.correct_answer)}[/bold]"
+                    f"The correct answer was "
+                    f"[bold]{q.correct_answer}) {q.get_option(q.correct_answer)}[/bold]"
                 )
 
             # Show explanation
@@ -414,7 +424,9 @@ async def run_study_session(
     console.print(table)
 
     if accuracy >= 0.85:
-        console.print("[bold green]Excellent! You're well above the mastery threshold.[/bold green]")
+        console.print(
+            "[bold green]Excellent! You're well above the mastery threshold.[/bold green]"
+        )
     elif accuracy >= 0.70:
         console.print("[yellow]Good progress! Keep practicing to reach 85%+.[/yellow]")
     else:

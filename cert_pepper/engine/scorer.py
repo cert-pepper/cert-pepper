@@ -14,8 +14,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from cert_pepper.models.analytics import (
     PredictedScore,
-    WeakArea,
     StudyRecommendation,
+    WeakArea,
 )
 
 PASSING_SCORE = 750

@@ -2,16 +2,14 @@
 
 from __future__ import annotations
 
-import asyncio
 import time
-from datetime import datetime
 
 from rich.console import Console
 from rich.panel import Panel
-from rich.progress import Progress, SpinnerColumn, BarColumn, TextColumn, TimeElapsedColumn
-from rich.table import Table
 from rich.prompt import Prompt
+from rich.table import Table
 from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from cert_pepper.db.connection import get_session
 from cert_pepper.engine import selector
@@ -20,7 +18,7 @@ from cert_pepper.models.content import Question
 console = Console()
 
 
-async def get_question(session, question_id: int) -> Question | None:
+async def get_question(session: AsyncSession, question_id: int) -> Question | None:
     result = await session.execute(
         text("""
             SELECT q.id, q.domain_id, d.number, q.number, q.stem,
@@ -71,7 +69,9 @@ async def run_exam(
 
     async with get_session() as session:
         # Get user
-        result = await session.execute(text("SELECT id FROM users WHERE username='default' LIMIT 1"))
+        result = await session.execute(
+            text("SELECT id FROM users WHERE username='default' LIMIT 1")
+        )
         row = result.fetchone()
         if not row:
             console.print("[red]No user found. Run `cert-pepper db init` first.[/red]")
@@ -88,7 +88,10 @@ async def run_exam(
 
         # Fetch domain names and weights from DB
         result = await session.execute(
-            text("SELECT number, name, weight_pct FROM domains WHERE certification_id = :cid ORDER BY number"),
+            text(
+                "SELECT number, name, weight_pct FROM domains"
+                " WHERE certification_id = :cid ORDER BY number"
+            ),
             {"cid": cert_id},
         )
         domain_rows = result.fetchall()
@@ -109,11 +112,15 @@ async def run_exam(
 
         # Create exam session
         await session.execute(
-            text("INSERT INTO study_sessions (user_id, session_type, certification_id) VALUES (:uid, 'exam', :cert_id)"),
+            text(
+                "INSERT INTO study_sessions (user_id, session_type, certification_id)"
+                " VALUES (:uid, 'exam', :cert_id)"
+            ),
             {"uid": user_id, "cert_id": cert_id},
         )
         result = await session.execute(text("SELECT last_insert_rowid()"))
-        session_id = result.fetchone()[0]
+        session_row = result.fetchone()
+        session_id = session_row[0] if session_row else 0
 
         # Track answers
         answers: dict[int, str] = {}  # question_id → selected answer
@@ -148,7 +155,9 @@ async def run_exam(
             console.print(
                 f"[dim]Question {i}/{actual_count} | "
                 f"[{color}]Domain {q.domain_number}[/{color}] | "
-                f"Time remaining: [{'green' if remaining > 1800 else 'yellow' if remaining > 600 else 'red'}]{time_str}[/]"
+                f"Time remaining: "
+                f"[{'green' if remaining > 1800 else 'yellow' if remaining > 600 else 'red'}]"
+                f"{time_str}[/]"
                 f"[/dim]"
             )
             console.print(f"\n{q.stem}\n")
@@ -161,18 +170,17 @@ async def run_exam(
                 ans = Prompt.ask("Answer [A/B/C/D/Q=quit]").strip().upper()
                 if ans == "Q":
                     console.print("\n[yellow]Exam ended early.[/yellow]")
-                    goto_results = True
                     break
                 if ans in ("A", "B", "C", "D"):
                     answers[q_id] = ans
                     is_correct = ans == q.correct_answer
                     if q.domain_number in domain_results:
                         domain_results[q.domain_number].append(is_correct)
-                    console.print(f"[dim]Recorded.[/dim]\n")
+                    console.print("[dim]Recorded.[/dim]\n")
                     break
                 console.print("[red]Enter A, B, C, D, or Q.[/red]")
             else:
-                goto_results = False
+                pass
 
             if ans == "Q":
                 break

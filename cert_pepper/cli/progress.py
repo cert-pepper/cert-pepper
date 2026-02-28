@@ -5,11 +5,10 @@ from __future__ import annotations
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
-from rich.text import Text
 from sqlalchemy import text
 
 from cert_pepper.db.connection import get_session
-from cert_pepper.engine.scorer import predict_score, get_weak_areas, get_recommendations
+from cert_pepper.engine.scorer import get_recommendations, get_weak_areas, predict_score
 
 console = Console()
 
@@ -20,7 +19,9 @@ async def show_dashboard(exam_code: str | None = None) -> None:
 
     async with get_session() as session:
         # Get default user
-        result = await session.execute(text("SELECT id FROM users WHERE username='default' LIMIT 1"))
+        result = await session.execute(
+            text("SELECT id FROM users WHERE username='default' LIMIT 1")
+        )
         row = result.fetchone()
         if not row:
             console.print("[red]No user found. Run `cert-pepper db init` first.[/red]")
@@ -44,7 +45,10 @@ async def show_dashboard(exam_code: str | None = None) -> None:
 
         # Get domain names/weights from DB
         result = await session.execute(
-            text("SELECT number, name, weight_pct FROM domains WHERE certification_id = :cid ORDER BY number"),
+            text(
+                "SELECT number, name, weight_pct FROM domains"
+                " WHERE certification_id = :cid ORDER BY number"
+            ),
             {"cid": cert_id},
         )
         domain_rows = result.fetchall()
@@ -60,6 +64,7 @@ async def show_dashboard(exam_code: str | None = None) -> None:
             {"uid": user_id},
         )
         stats = result.fetchone()
+        assert stats is not None
         total_attempts = stats[0] or 0
         total_correct = stats[1] or 0
 
@@ -81,7 +86,7 @@ async def show_dashboard(exam_code: str | None = None) -> None:
 
         # Get predicted score
         score = await predict_score(session, user_id, cert_id=cert_id)
-        weak_areas = await get_weak_areas(session, user_id, cert_id=cert_id)
+        await get_weak_areas(session, user_id, cert_id=cert_id)
         recommendations = await get_recommendations(session, user_id, cert_id=cert_id)
 
         # Get FSRS cards due
@@ -92,7 +97,8 @@ async def show_dashboard(exam_code: str | None = None) -> None:
             """),
             {"uid": user_id},
         )
-        cards_due = result.fetchone()[0] or 0
+        cards_row = result.fetchone()
+        cards_due = cards_row[0] if cards_row else 0
 
         # Get study streak
         result = await session.execute(
@@ -104,7 +110,8 @@ async def show_dashboard(exam_code: str | None = None) -> None:
             """),
             {"uid": user_id},
         )
-        streak = result.fetchone()[0] or 0
+        streak_row = result.fetchone()
+        streak = streak_row[0] if streak_row else 0
 
     # === Render Dashboard ===
     console.print()
@@ -118,7 +125,11 @@ async def show_dashboard(exam_code: str | None = None) -> None:
 
     # Overall stats
     overall_acc = total_correct / total_attempts if total_attempts > 0 else 0
-    score_color = "green" if score.predicted_score >= 750 else "yellow" if score.predicted_score >= 680 else "red"
+    score_color = (
+        "green" if score.predicted_score >= 750
+        else "yellow" if score.predicted_score >= 680
+        else "red"
+    )
 
     stats_table = Table(show_header=False, box=None, padding=(0, 2))
     stats_table.add_column("", style="dim")
@@ -130,7 +141,9 @@ async def show_dashboard(exam_code: str | None = None) -> None:
         f"[{score_color}]{score.predicted_score}/900[/{score_color}] "
         f"(Pass prob: {score.pass_probability:.0%})",
     )
-    stats_table.add_row("Cards Due Today", f"[yellow]{cards_due}[/yellow]" if cards_due > 0 else "0")
+    stats_table.add_row(
+        "Cards Due Today", f"[yellow]{cards_due}[/yellow]" if cards_due > 0 else "0"
+    )
     stats_table.add_row("Study Days (30d)", str(streak))
     console.print(stats_table)
     console.print()

@@ -5,13 +5,14 @@ from __future__ import annotations
 import json
 
 from mcp.server.fastmcp import FastMCP
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from cert_pepper.db.connection import get_session, init_db
 
 mcp = FastMCP("cert-pepper-analytics")
 
 
-async def _get_user_id(session) -> int:
+async def _get_user_id(session: AsyncSession) -> int:
     from sqlalchemy import text
 
     result = await session.execute(text("SELECT id FROM users WHERE username='default' LIMIT 1"))
@@ -93,7 +94,9 @@ async def get_study_recommendations(
             cert_id = await resolve_cert_id(db, exam_code)
         except ValueError as e:
             return json.dumps({"error": str(e)})
-        recs = await get_recommendations(db, user_id, days_remaining=days_remaining, cert_id=cert_id)
+        recs = await get_recommendations(
+            db, user_id, days_remaining=days_remaining, cert_id=cert_id
+        )
 
     return json.dumps({
         "days_remaining": days_remaining,
@@ -155,7 +158,7 @@ async def get_performance_trend(days: int = 7, exam_code: str | None = None) -> 
             )
         rows = result.fetchall()
 
-    trend: dict[str, dict] = {}
+    trend: dict[str, dict[str, str]] = {}
     for row in rows:
         day, domain_num, total, correct = row
         correct = correct or 0
@@ -189,13 +192,17 @@ async def progress_dashboard() -> str:
             {"uid": user_id},
         )
         row = result.fetchone()
+        assert row is not None
         total = row[0] or 0
         correct = row[1] or 0
 
         # Get domain names dynamically
         if cert_id is not None:
             result = await db.execute(
-                text("SELECT number, name, weight_pct FROM domains WHERE certification_id = :cid ORDER BY number"),
+                text(
+                    "SELECT number, name, weight_pct FROM domains"
+                    " WHERE certification_id = :cid ORDER BY number"
+                ),
                 {"cid": cert_id},
             )
             domains = result.fetchall()
@@ -224,7 +231,10 @@ async def progress_dashboard() -> str:
 {domain_rows}
 
 ## Weak Areas (below 70%)
-{chr(10).join(f"- Domain {w.domain_number}: {w.domain_name} — {w.accuracy_pct:.0%} ({w.attempts} attempts)" for w in weak) or "None — all domains above threshold!"}
+{chr(10).join(
+    f"- Domain {w.domain_number}: {w.domain_name} — {w.accuracy_pct:.0%} ({w.attempts} attempts)"
+    for w in weak
+) or "None — all domains above threshold!"}
 """
     return report
 

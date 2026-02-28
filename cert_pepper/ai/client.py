@@ -40,7 +40,6 @@ def generate_explanation(
     Returns:
         (content, tokens_used, cache_hit)
     """
-    import anthropic
 
     settings = get_settings()
     if model is None:

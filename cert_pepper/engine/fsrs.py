@@ -15,8 +15,8 @@ Key concepts:
 from __future__ import annotations
 
 import math
-from datetime import datetime, timedelta
 from dataclasses import dataclass, field
+from datetime import datetime, timedelta
 
 # FSRS-4.5 default parameters (w0..w18)
 # These are the optimized weights from the paper
@@ -60,7 +60,7 @@ def retrievability(stability: float, elapsed_days: float) -> float:
     """R(t) = (1 + FACTOR * t / S) ^ DECAY."""
     if elapsed_days <= 0:
         return 1.0
-    return (1 + FACTOR * elapsed_days / stability) ** DECAY
+    return float((1 + FACTOR * elapsed_days / stability) ** DECAY)
 
 
 def initial_stability(rating: int) -> float:
@@ -104,7 +104,7 @@ def stability_after_recall(d: float, s: float, r: float, rating: int) -> float:
         * easy_bonus
         + 1
     )
-    return max(s, s_new)  # stability should only grow on recall
+    return float(max(s, s_new))  # stability should only grow on recall
 
 
 def stability_after_forget(d: float, s: float, r: float) -> float:
@@ -116,14 +116,14 @@ def stability_after_forget(d: float, s: float, r: float) -> float:
         * ((s + 1) ** W[13] - 1)
         * math.exp(W[14] * (1 - r))
     )
-    return max(0.1, min(s, s_new))  # lapse reduces stability
+    return float(max(0.1, min(s, s_new)))  # lapse reduces stability
 
 
 def next_interval(stability: float, target_retention: float = REQUEST_RETENTION) -> float:
     """Calculate next review interval in days."""
     # I = S / FACTOR * (target_retention^(1/DECAY) - 1)
     interval = stability / FACTOR * (target_retention ** (1 / DECAY) - 1)
-    return max(1.0, interval)
+    return float(max(1.0, interval))
 
 
 def schedule(card: FSRSCard, rating: int, now: datetime | None = None) -> FSRSCard:

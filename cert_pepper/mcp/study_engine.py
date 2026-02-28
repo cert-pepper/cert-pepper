@@ -7,6 +7,7 @@ from datetime import datetime
 from typing import Any
 
 from mcp.server.fastmcp import FastMCP
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from cert_pepper.db.connection import get_session, init_db
 from cert_pepper.engine import fsrs, selector
@@ -18,15 +19,15 @@ mcp = FastMCP("cert-pepper-study-engine")
 _sessions: dict[str, dict[str, Any]] = {}
 
 
-async def _get_user_id(session) -> int:
+async def _get_user_id(session: AsyncSession) -> int:
     from sqlalchemy import text
 
     result = await session.execute(text("SELECT id FROM users WHERE username='default' LIMIT 1"))
     row = result.fetchone()
-    return row[0] if row else 1
+    return int(row[0]) if row else 1
 
 
-async def _get_question(session, question_id: int) -> Question | None:
+async def _get_question(session: AsyncSession, question_id: int) -> Question | None:
     from sqlalchemy import text
 
     result = await session.execute(
@@ -67,6 +68,7 @@ async def start_session(
 ) -> str:
     """Start a new study session. Returns session_id."""
     from sqlalchemy import text
+
     from cert_pepper.db.exams import resolve_cert_id
 
     async with get_session() as db:
@@ -85,13 +87,15 @@ async def start_session(
 
         await db.execute(
             text(
-                "INSERT INTO study_sessions (user_id, session_type, domain_filter, certification_id)"
+                "INSERT INTO study_sessions"
+                " (user_id, session_type, domain_filter, certification_id)"
                 " VALUES (:uid, :type, :domain, :cert_id)"
             ),
             {"uid": user_id, "type": session_type, "domain": domain_filter, "cert_id": cert_id},
         )
         result = await db.execute(text("SELECT last_insert_rowid()"))
-        session_db_id = result.fetchone()[0]
+        id_row = result.fetchone()
+        session_db_id = int(id_row[0]) if id_row else 0
 
     session_id = f"sess_{session_db_id}"
     _sessions[session_id] = {
@@ -127,7 +131,9 @@ async def get_next_question(session_id: str) -> str:
         )
 
         if question_id is None:
-            return json.dumps({"error": "No questions available. Try running cert-pepper ingest first."})
+            return json.dumps({
+                "error": "No questions available. Try running cert-pepper ingest first."
+            })
 
         q = await _get_question(db, question_id)
         if q is None:
@@ -198,7 +204,8 @@ async def submit_answer(
                 INSERT INTO fsrs_cards
                     (user_id, content_type, content_id, stability, difficulty, retrievability,
                      due_date, last_review, state, step, reps, lapses)
-                VALUES (:uid, 'question', :qid, :s, :d, :r, :due, :last, :state, :step, :reps, :lapses)
+                VALUES (:uid, 'question', :qid, :s, :d, :r,
+                        :due, :last, :state, :step, :reps, :lapses)
                 ON CONFLICT(user_id, content_type, content_id) DO UPDATE SET
                     stability=excluded.stability, difficulty=excluded.difficulty,
                     retrievability=excluded.retrievability, due_date=excluded.due_date,
@@ -226,7 +233,8 @@ async def submit_answer(
         await db.execute(
             text("""
                 INSERT INTO question_attempts
-                    (session_id, user_id, question_id, selected_answer, is_correct, time_taken_seconds)
+                    (session_id, user_id, question_id, selected_answer,
+                     is_correct, time_taken_seconds)
                 VALUES (:sid, :uid, :qid, :ans, :correct, :time)
             """),
             {
@@ -366,6 +374,7 @@ async def daily_progress() -> str:
             {"uid": user_id},
         )
         row = result.fetchone()
+        assert row is not None
         total = row[0] or 0
         correct = row[1] or 0
         acc = correct / total if total > 0 else 0

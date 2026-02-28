@@ -7,7 +7,6 @@ from pathlib import Path
 
 from cert_pepper.models.content import ParsedQuestion
 
-
 # Matches: **Q1.** or **Q1)**
 _Q_HEADER = re.compile(r"\*\*Q(\d+)[.)]\*\*\s*(.*?)(?=\n)", re.DOTALL)
 
@@ -15,7 +14,10 @@ _Q_HEADER = re.compile(r"\*\*Q(\d+)[.)]\*\*\s*(.*?)(?=\n)", re.DOTALL)
 _OPTION = re.compile(r"^([A-D])[).]\s+(.+)$", re.MULTILINE)
 
 # Matches answer inside <details> block: **B) DDoS** or **B. DDoS**
-_ANSWER = re.compile(r"<details><summary>Answer</summary>\s*\*\*([A-D])[).][^*]*\*\*\s*(.*?)\s*</details>", re.DOTALL)
+_ANSWER = re.compile(
+    r"<details><summary>Answer</summary>\s*\*\*([A-D])[).][^*]*\*\*\s*(.*?)\s*</details>",
+    re.DOTALL,
+)
 
 # Extract domain number from filename: domain1-practice.md → 1
 _DOMAIN_NUM = re.compile(r"domain(\d+)", re.IGNORECASE)
