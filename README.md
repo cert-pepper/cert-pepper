@@ -11,25 +11,18 @@ cert-pepper ingests your exam content (questions, flashcards, acronyms) into SQL
 ## Quick Start
 
 ```bash
-# Download the latest release
+# Option 1: download the latest release
 curl -L https://github.com/crook3dfingers/cert-pepper/archive/refs/tags/v0.2.0.tar.gz | tar xz
 cd cert-pepper-0.2.0
+
+# Option 2: clone (to track future updates)
+# git clone https://github.com/crook3dfingers/cert-pepper.git
+# cd cert-pepper
+
 cp .env.example .env          # add ANTHROPIC_API_KEY for AI explanations in CLI study sessions
 uv sync
 uv run cert-pepper db init
 uv run cert-pepper ingest     # reads examples/security-plus/ by default
-uv run cert-pepper study
-```
-
-Or clone the repo if you want to track future updates:
-
-```bash
-git clone https://github.com/crook3dfingers/cert-pepper.git
-cd cert-pepper
-cp .env.example .env
-uv sync
-uv run cert-pepper db init
-uv run cert-pepper ingest
 uv run cert-pepper study
 ```
 
