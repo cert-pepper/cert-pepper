@@ -422,6 +422,10 @@ async def run_study_session(
 
     console.print()
     console.print(table)
+    console.print(
+        f'[dim]Session ID: {session_id} — '
+        f'Ask Claude: "Explain my wrong answers from session {session_id}"[/dim]'
+    )
 
     if accuracy >= 0.85:
         console.print(

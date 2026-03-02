@@ -28,6 +28,7 @@ class TestStudyEngineMCP:
         assert "submit_answer" in tool_names
         assert "get_due_cards" in tool_names
         assert "end_session" in tool_names
+        assert "get_session_wrong_answers" in tool_names
 
 
 class TestContentMCP:

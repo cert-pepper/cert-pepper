@@ -292,4 +292,8 @@ async def run_exam(
                         f"  • Domain {num}: {name} — {acc:.0%} accuracy"
                     )
 
+    console.print(
+        f'[dim]Session ID: {session_id} — '
+        f'Ask Claude: "Explain my wrong answers from session {session_id}"[/dim]'
+    )
     console.print()

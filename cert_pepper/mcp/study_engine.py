@@ -358,6 +358,95 @@ async def end_session(session_id: str) -> str:
     })
 
 
+@mcp.tool()
+async def get_session_wrong_answers(session_id: int | None = None) -> str:
+    """Get wrong answers from a study or exam session.
+
+    If session_id is None, uses the most recent completed session.
+    Returns question details and what you answered vs. the correct answer,
+    so you can call get_explanation() on each for AI explanations.
+    """
+    from sqlalchemy import text
+
+    async with get_session() as db:
+        user_id = await _get_user_id(db)
+
+        if session_id is None:
+            result = await db.execute(
+                text("""
+                    SELECT id, session_type, questions_seen, questions_correct
+                    FROM study_sessions
+                    WHERE user_id = :uid AND ended_at IS NOT NULL
+                    ORDER BY ended_at DESC LIMIT 1
+                """),
+                {"uid": user_id},
+            )
+            row = result.fetchone()
+            if not row:
+                return json.dumps({
+                    "error": "No completed sessions found. Run cert-pepper study first."
+                })
+            session_id, session_type, total_answered, total_correct = (
+                int(row[0]), row[1], row[2], row[3]
+            )
+        else:
+            result = await db.execute(
+                text("""
+                    SELECT session_type, questions_seen, questions_correct
+                    FROM study_sessions
+                    WHERE id = :sid AND user_id = :uid
+                """),
+                {"sid": session_id, "uid": user_id},
+            )
+            row = result.fetchone()
+            if not row:
+                return json.dumps({"error": f"Session {session_id} not found."})
+            session_type, total_answered, total_correct = row[0], row[1], row[2]
+
+        result = await db.execute(
+            text("""
+                SELECT qa.question_id, qa.selected_answer, qa.time_taken_seconds,
+                       q.stem, q.correct_answer,
+                       q.option_a, q.option_b, q.option_c, q.option_d,
+                       d.number AS domain_number
+                FROM question_attempts qa
+                JOIN questions q ON q.id = qa.question_id
+                JOIN domains d ON d.id = q.domain_id
+                WHERE qa.session_id = :session_id AND qa.is_correct = 0
+                ORDER BY qa.id
+            """),
+            {"session_id": session_id},
+        )
+        wrong_rows = result.fetchall()
+
+    wrong_answers = [
+        {
+            "question_id": row[0],
+            "domain": row[9],
+            "stem": row[3],
+            "options": {"A": row[5], "B": row[6], "C": row[7], "D": row[8]},
+            "your_answer": row[1],
+            "correct_answer": row[4],
+            "time_seconds": row[2],
+            "hint": (
+                f"Call get_explanation(question_id={row[0]}, selected_answer='{row[1]}')"
+                " for AI explanation"
+            ),
+        }
+        for row in wrong_rows
+    ]
+
+    accuracy = f"{total_correct / total_answered:.0%}" if total_answered > 0 else "0%"
+    return json.dumps({
+        "session_id": session_id,
+        "session_type": session_type,
+        "wrong_count": len(wrong_answers),
+        "total_answered": total_answered,
+        "accuracy": accuracy,
+        "wrong_answers": wrong_answers,
+    })
+
+
 @mcp.resource("progress://daily")
 async def daily_progress() -> str:
     """Today's study statistics."""
