@@ -11,6 +11,9 @@ cert-pepper ingests your exam content (questions, flashcards, acronyms) into SQL
 ## Quick Start
 
 ```bash
+# Install uv (skip if already installed — https://astral.sh/uv)
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
 # Option 1: download the latest release
 curl -L https://github.com/crook3dfingers/cert-pepper/archive/refs/tags/v0.2.0.tar.gz | tar xz
 cd cert-pepper-0.2.0
