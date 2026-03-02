@@ -24,10 +24,19 @@ cd cert-pepper-0.2.0
 
 cp .env.example .env          # add ANTHROPIC_API_KEY for AI explanations in CLI study sessions
 uv sync
-uv run cert-pepper db init
-uv run cert-pepper ingest     # reads examples/security-plus/ by default
+```
+
+Open the repo in **Claude Code** (see [MCP Integration](#mcp-integration) to enable the servers). Ask Claude to build a question bank for your exam:
+
+> Set up a question bank for the CISSP exam
+
+Claude runs `setup_exam`, generates ~90 AI-written practice questions per domain, and loads them into the database. Then start studying:
+
+```bash
 uv run cert-pepper study
 ```
+
+To use hand-crafted markdown content instead, see [Adding Your Own Exam](#adding-your-own-exam).
 
 ---
 
