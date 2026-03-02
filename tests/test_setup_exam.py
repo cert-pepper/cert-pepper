@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import json
 import textwrap
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
+import httpx
 import pytest
 
 from cert_pepper.ingestion.questions import parse_questions_text
@@ -178,3 +179,223 @@ class TestSetupExamExisting:
 
         assert result["status"] == "ready"
         assert result["exam_code"] == "SY0-701"
+
+
+# ── helpers for mocking httpx AsyncClient ──────────────────────────────────────
+
+def _make_reddit_json(posts: list[dict]) -> dict:
+    """Build a minimal Reddit JSON API response with the given posts."""
+    return {
+        "data": {
+            "children": [
+                {"data": {"title": p["title"], "selftext": p["selftext"], "score": p["score"]}}
+                for p in posts
+            ]
+        }
+    }
+
+
+def _make_mock_client(json_return_value: dict) -> MagicMock:
+    """Return a mock httpx.AsyncClient that returns json_return_value on GET."""
+    mock_resp = MagicMock()
+    mock_resp.raise_for_status = MagicMock()
+    mock_resp.json.return_value = json_return_value
+
+    mock_client = AsyncMock()
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=False)
+    mock_client.get = AsyncMock(return_value=mock_resp)
+    return mock_client
+
+
+class TestFetchRedditExcerpts:
+    async def test_success_returns_excerpt_list(self):
+        from cert_pepper.mcp.content import _fetch_reddit_excerpts
+
+        posts = [
+            {"title": "Passed CISSP!", "selftext": "Focus on risk management.", "score": 50},
+            {"title": "Tips for CISSP", "selftext": "BCP is huge on the exam.", "score": 30},
+        ]
+        mock_client = _make_mock_client(_make_reddit_json(posts))
+
+        with patch("cert_pepper.mcp.content.httpx.AsyncClient", return_value=mock_client):
+            result = await _fetch_reddit_excerpts("CISSP", "ISC2")
+
+        assert isinstance(result, list)
+        assert len(result) > 0
+        assert any("CISSP" in excerpt or "risk" in excerpt for excerpt in result)
+
+    async def test_network_error_returns_empty_list(self):
+        from cert_pepper.mcp.content import _fetch_reddit_excerpts
+
+        mock_client = AsyncMock()
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+        mock_client.get = AsyncMock(
+            side_effect=httpx.RequestError("connection refused", request=MagicMock())
+        )
+
+        with patch("cert_pepper.mcp.content.httpx.AsyncClient", return_value=mock_client):
+            result = await _fetch_reddit_excerpts("CISSP", "ISC2")
+
+        assert result == []
+
+    async def test_malformed_json_returns_empty_list(self):
+        from cert_pepper.mcp.content import _fetch_reddit_excerpts
+
+        # JSON without expected structure
+        mock_client = _make_mock_client({"unexpected": "structure"})
+
+        with patch("cert_pepper.mcp.content.httpx.AsyncClient", return_value=mock_client):
+            result = await _fetch_reddit_excerpts("CISSP", "ISC2")
+
+        assert result == []
+
+    async def test_http_error_returns_empty_list(self):
+        from cert_pepper.mcp.content import _fetch_reddit_excerpts
+
+        mock_resp = MagicMock()
+        mock_resp.raise_for_status = MagicMock(
+            side_effect=httpx.HTTPStatusError(
+                "429 Too Many Requests",
+                request=MagicMock(),
+                response=MagicMock(),
+            )
+        )
+
+        mock_client = AsyncMock()
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+        mock_client.get = AsyncMock(return_value=mock_resp)
+
+        with patch("cert_pepper.mcp.content.httpx.AsyncClient", return_value=mock_client):
+            result = await _fetch_reddit_excerpts("CISSP", "ISC2")
+
+        assert result == []
+
+    async def test_empty_children_returns_empty_list(self):
+        from cert_pepper.mcp.content import _fetch_reddit_excerpts
+
+        mock_client = _make_mock_client(_make_reddit_json([]))
+
+        with patch("cert_pepper.mcp.content.httpx.AsyncClient", return_value=mock_client):
+            result = await _fetch_reddit_excerpts("CISSP", "ISC2")
+
+        assert result == []
+
+    async def test_low_score_posts_excluded(self):
+        from cert_pepper.mcp.content import _fetch_reddit_excerpts
+
+        posts = [
+            {"title": "Spam post", "selftext": "Buy my course!", "score": 1},
+            {"title": "Good post", "selftext": "Domain 1 is heavily tested.", "score": 20},
+        ]
+        mock_client = _make_mock_client(_make_reddit_json(posts))
+
+        with patch("cert_pepper.mcp.content.httpx.AsyncClient", return_value=mock_client):
+            result = await _fetch_reddit_excerpts("CISSP", "ISC2")
+
+        assert len(result) == 1
+        assert "Domain 1" in result[0]
+
+    async def test_removed_deleted_posts_excluded(self):
+        from cert_pepper.mcp.content import _fetch_reddit_excerpts
+
+        posts = [
+            {"title": "Removed post", "selftext": "[removed]", "score": 100},
+            {"title": "Deleted post", "selftext": "[deleted]", "score": 100},
+            {"title": "Good post", "selftext": "Study access controls.", "score": 50},
+        ]
+        mock_client = _make_mock_client(_make_reddit_json(posts))
+
+        with patch("cert_pepper.mcp.content.httpx.AsyncClient", return_value=mock_client):
+            result = await _fetch_reddit_excerpts("CISSP", "ISC2")
+
+        assert len(result) == 1
+        assert "access" in result[0]
+
+
+class TestBuildResearchContext:
+    async def test_returns_synthesis_when_excerpts_available(self):
+        from cert_pepper.mcp.content import _build_research_context
+
+        excerpts = ["Passed CISSP: Focus on risk management.", "Tips: BCP is huge."]
+
+        sampling_result = MagicMock()
+        sampling_result.content = MagicMock()
+        sampling_result.content.text = "- Risk management is critical\n- BCP tested heavily"
+
+        ctx = MagicMock()
+        ctx.session = AsyncMock()
+        ctx.session.create_message = AsyncMock(return_value=sampling_result)
+
+        with patch(
+            "cert_pepper.mcp.content._fetch_reddit_excerpts", return_value=excerpts
+        ):
+            result = await _build_research_context("CISSP", "ISC2", ctx)
+
+        assert isinstance(result, str)
+        assert len(result) > 0
+        ctx.session.create_message.assert_called_once()
+
+    async def test_returns_empty_string_when_no_excerpts(self):
+        from cert_pepper.mcp.content import _build_research_context
+
+        ctx = MagicMock()
+        ctx.session = AsyncMock()
+
+        with patch("cert_pepper.mcp.content._fetch_reddit_excerpts", return_value=[]):
+            result = await _build_research_context("CISSP", "ISC2", ctx)
+
+        assert result == ""
+        ctx.session.create_message.assert_not_called()
+
+    async def test_returns_empty_string_when_sampling_fails(self):
+        from cert_pepper.mcp.content import _build_research_context
+
+        ctx = MagicMock()
+        ctx.session = AsyncMock()
+        ctx.session.create_message = AsyncMock(side_effect=RuntimeError("sampling failed"))
+
+        with patch(
+            "cert_pepper.mcp.content._fetch_reddit_excerpts",
+            return_value=["Some excerpt: content here."],
+        ):
+            result = await _build_research_context("CISSP", "ISC2", ctx)
+
+        assert result == ""
+
+    def test_research_context_injected_into_questions_user_prompt(self):
+        from cert_pepper.mcp.content import _QUESTIONS_USER
+
+        research_context = (
+            "\nCommunity exam insights (incorporate into question difficulty and distractors):\n"
+            "- PKI tested heavily\n"
+        )
+        rendered = _QUESTIONS_USER.format(
+            n=30,
+            start=1,
+            end=30,
+            exam_name="CISSP",
+            domain_number=1,
+            domain_name="Security and Risk Management",
+            weight_pct=15.0,
+            research_context=research_context,
+        )
+        assert "- PKI tested heavily" in rendered
+
+    def test_research_context_empty_string_renders_cleanly(self):
+        from cert_pepper.mcp.content import _QUESTIONS_USER
+
+        rendered = _QUESTIONS_USER.format(
+            n=30,
+            start=1,
+            end=30,
+            exam_name="CISSP",
+            domain_number=1,
+            domain_name="Security and Risk Management",
+            weight_pct=15.0,
+            research_context="",
+        )
+        assert "CISSP" in rendered
+        assert "Security and Risk Management" in rendered

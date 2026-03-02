@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
+import httpx
 from mcp.server.fastmcp import Context, FastMCP
 from mcp.types import SamplingMessage, TextContent
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -373,8 +374,42 @@ _QUESTIONS_USER = """\
 Generate {n} practice questions (Q{start} through Q{end}) for:
   Exam:   {exam_name}
   Domain {domain_number}: {domain_name} ({weight_pct}% of exam)
-
+{research_context}
 Focus on realistic exam-difficulty scenarios covering the full breadth of this domain.\
+"""
+
+_VENDOR_SUBREDDITS: dict[str, str] = {
+    "comptia": "CompTIA",
+    "isc2": "cissp",
+    "aws": "AWSCertifications",
+    "amazon": "AWSCertifications",
+    "microsoft": "AzureCertifications",
+    "azure": "AzureCertifications",
+    "google": "googlecloud",
+    "gcp": "googlecloud",
+}
+
+_REDDIT_SEARCH_URL = "https://www.reddit.com/search.json"
+_REDDIT_SUBREDDIT_URL = "https://www.reddit.com/r/{sub}/search.json"
+_REDDIT_HEADERS = {"User-Agent": "cert-pepper/1.0 (exam study tool; educational use)"}
+
+_RESEARCH_SYNTHESIS_SYSTEM = """\
+You are a certification exam intelligence analyst. Read community discussion \
+posts and extract concise, actionable insights about the real exam. \
+Return ONLY a bulleted list (≤15 bullets, each starting with "- "). \
+No preamble, no commentary, no headings.\
+"""
+
+_RESEARCH_SYNTHESIS_USER = """\
+Below are excerpts from Reddit discussions about the {exam_name} exam. \
+Synthesize into ≤15 bullet points a question writer should know: \
+tricky topics, common traps, frequently tested concepts, areas of confusion.
+
+--- EXCERPTS START ---
+{excerpts_text}
+--- EXCERPTS END ---
+
+Return only the bullet list.\
 """
 
 
@@ -386,6 +421,85 @@ def _strip_json_fences(text: str) -> str:
         # drop first line (```json or ```) and last line (```)
         text = "\n".join(lines[1:-1]).strip()
     return text
+
+
+async def _fetch_reddit_excerpts(exam_name: str, vendor: str) -> list[str]:
+    """Fetch top Reddit post excerpts about the exam. Returns [] on any failure."""
+    subreddit = _VENDOR_SUBREDDITS.get(vendor.lower())
+
+    urls: list[str] = [_REDDIT_SEARCH_URL]
+    if subreddit:
+        urls.append(_REDDIT_SUBREDDIT_URL.format(sub=subreddit))
+
+    seen_titles: set[str] = set()
+    excerpts: list[str] = []
+
+    try:
+        async with httpx.AsyncClient(headers=_REDDIT_HEADERS, timeout=10.0) as client:
+            for url in urls:
+                try:
+                    params = {"q": exam_name, "sort": "top", "t": "year", "limit": "20"}
+                    resp = await client.get(url, params=params)
+                    resp.raise_for_status()
+                    data = resp.json()
+                    children = data["data"]["children"]
+                    for child in children:
+                        post = child["data"]
+                        title = post.get("title", "")
+                        selftext = post.get("selftext", "")
+                        score = post.get("score", 0)
+                        if score < 5:
+                            continue
+                        if selftext in ("[removed]", "[deleted]", ""):
+                            continue
+                        if title in seen_titles:
+                            continue
+                        seen_titles.add(title)
+                        excerpts.append(f"{title}: {selftext[:400]}")
+                except Exception:
+                    continue
+    except Exception:
+        return []
+
+    return excerpts
+
+
+async def _build_research_context(
+    exam_name: str, vendor: str, ctx: Context[Any, Any, Any]
+) -> str:
+    """Synthesize Reddit research into exam insights via MCP sampling.
+
+    Returns formatted string for injection into _QUESTIONS_USER, or '' on failure.
+    """
+    try:
+        excerpts = await _fetch_reddit_excerpts(exam_name, vendor)
+        if not excerpts:
+            return ""
+
+        excerpts_text = "\n\n".join(excerpts)
+        result = await ctx.session.create_message(
+            messages=[
+                SamplingMessage(
+                    role="user",
+                    content=TextContent(
+                        type="text",
+                        text=_RESEARCH_SYNTHESIS_USER.format(
+                            exam_name=exam_name, excerpts_text=excerpts_text
+                        ),
+                    ),
+                )
+            ],
+            system_prompt=_RESEARCH_SYNTHESIS_SYSTEM,
+            max_tokens=512,
+        )
+        bullets = result.content.text if hasattr(result.content, "text") else str(result.content)
+        header = (
+            "\nCommunity exam insights"
+            " (incorporate these into question difficulty and distractors):\n"
+        )
+        return header + bullets.strip() + "\n"
+    except Exception:
+        return ""
 
 
 @mcp.tool()
@@ -485,6 +599,8 @@ async def setup_exam(exam_name: str, ctx: Context[Any, Any, Any]) -> str:
         return json.dumps({"error": f"Invalid exam config structure: {exc}", "raw": raw_json})
 
     # Step 2: insert config, then generate questions domain by domain
+    research_context = await _build_research_context(exam_config.name, exam_config.vendor, ctx)
+
     total_inserted = 0
     async with get_session() as db:
         cert_id = await ingest_exam_config(db, exam_config)
@@ -508,6 +624,7 @@ async def setup_exam(exam_name: str, ctx: Context[Any, Any, Any]) -> str:
                                     domain_number=domain.number,
                                     domain_name=domain.name,
                                     weight_pct=domain.weight_pct,
+                                    research_context=research_context,
                                 ),
                             ),
                         )
