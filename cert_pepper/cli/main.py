@@ -93,7 +93,7 @@ def study(
     domain: int | None = typer.Option(
         None, "--domain", "-d", help="Domain number (1-5). Default: adaptive."
     ),
-    count: int = typer.Option(10, "--count", "-n", help="Number of questions per session."),
+    count: int = typer.Option(25, "--count", "-n", help="Number of questions per session."),
     no_ai: bool = typer.Option(False, "--no-ai", help="Skip AI explanations (offline mode)."),
     exam: str | None = typer.Option(
         None, "--exam", "-e",

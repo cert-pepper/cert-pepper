@@ -1,8 +1,16 @@
-# Preparing for Security+ SY0-701 with cert-pepper: A 10-Day Example
+# Preparing for Security+ SY0-701: A 10-Day Sprint
 
-This guide describes an example 10-day study plan using cert-pepper for CompTIA Security+ SY0-701. The exam has 5 domains, 90 questions, a 90-minute time limit, and a passing score of 750/900. cert-pepper does not guarantee exam results — outcomes depend on your prior knowledge, study effort, and exam conditions.
+CompTIA recommends 40 hours of study for Security+ — 4 hours per day for 10 days. This guide is for candidates with an IT or security background who want a compressed schedule. If you're starting fresh, extend to 3–4 weeks.
 
-This walkthrough assumes you're using **Claude Code with MCP enabled** — that's the recommended path. A manual CLI alternative is included in each section.
+cert-pepper does not guarantee exam results — outcomes depend on your prior knowledge, study effort, and exam conditions. This walkthrough assumes you're using **Claude Code with MCP enabled** — that's the recommended path. A manual CLI alternative is included in each section.
+
+---
+
+## What a 10-Day Sprint Requires
+
+- **~4 hours/day** — the CompTIA 40-hour benchmark compressed into 10 days
+- **2 sessions × 25 questions = 50 questions/day** — roughly 45–60 minutes per session including review time
+- **Prior IT/security background** — candidates new to the field should extend to 3–4 weeks
 
 ---
 
@@ -16,7 +24,7 @@ This walkthrough assumes you're using **Claude Code with MCP enabled** — that'
 | 4 | Security Operations | 28% |
 | 5 | Program Management and Oversight | 20% |
 
-Passing score: **750 / 900** (~83%). Study time is best allocated proportional to domain weight.
+Passing score: **750 / 900** (~83%). Time limit: 90 minutes, 90 questions.
 
 ---
 
@@ -25,8 +33,17 @@ Passing score: **750 / 900** (~83%). Study time is best allocated proportional t
 ### Primary path — Claude Code with MCP
 
 ```bash
-git clone https://github.com/crook3dfingers/cert-pepper.git
-cd cert-pepper
+# Install uv if needed
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Download latest release
+curl -L https://github.com/crook3dfingers/cert-pepper/archive/refs/tags/v0.2.0.tar.gz | tar xz
+cd cert-pepper-0.2.0
+
+# git clone https://github.com/crook3dfingers/cert-pepper.git
+# cd cert-pepper
+
+cp .env.example .env   # add ANTHROPIC_API_KEY for CLI AI explanations
 uv sync
 ```
 
@@ -61,20 +78,20 @@ For the Security+ example content included in this repo, `CONTENT_ROOT` defaults
 
 ---
 
-## Days 1–4: Domain Study
+## Days 1–4: Domain Sweep
 
-Run a study session each day:
+Work through the four highest-weight domains in order: D4 (28%) → D2 (22%) → D5 (20%) → D3 (18%). Domain 1 (12%) is the lightest — questions from it appear during adaptive sessions on mixed days.
 
-```bash
-uv run cert-pepper study
-```
+Each day runs two sessions against that day's domain:
 
-The selector weights questions by domain weight and your historical accuracy, so high-weight domains (Security Operations at 28%, Threats at 22%) come up more often.
+| Day | Domain | AM session | PM session |
+|-----|--------|-----------|-----------|
+| 1 | Security Operations (D4) | `uv run cert-pepper study --domain 4 --count 25` | same |
+| 2 | Threats & Vulnerabilities (D2) | `uv run cert-pepper study --domain 2 --count 25` | same |
+| 3 | Program Management (D5) | `uv run cert-pepper study --domain 5 --count 25` | same |
+| 4 | Security Architecture (D3) | `uv run cert-pepper study --domain 3 --count 25` | same |
 
-During each session:
-- Unseen questions appear first; questions you got wrong come back sooner (FSRS scheduling).
-- Wrong answers trigger an AI explanation from Claude. When using Claude Code with MCP, explanations work without an API key.
-- After each session, check `progress` to see which domains are weakest.
+After each PM session, check where you stand:
 
 ```bash
 uv run cert-pepper progress
@@ -90,77 +107,94 @@ Domain 2: ██████░░░░ 61%  ← needs work
 
 ---
 
-## Days 5–6: Weak Area Drill
+## Day 5: Mixed Adaptive + Weak Area Identification
 
-Run `cert-pepper progress` to find domains below 70%.
+Shift from domain-focused sessions to adaptive mode. Questions are weighted by domain weight and your historical accuracy.
+
+**AM session:**
 
 ```bash
-# Focused drill on weakest domain
-uv run cert-pepper study --domain 2 --count 20
-
-# Repeat until accuracy climbs above 75%
-uv run cert-pepper progress
+uv run cert-pepper study --count 25
 ```
 
-Questions you got wrong come back sooner — FSRS handles the scheduling.
+**After AM session:**
+
+```bash
+uv run cert-pepper progress   # identify domains below 70%
+```
+
+**PM session — target the weakest domain:**
+
+```bash
+uv run cert-pepper study --domain <weakest> --count 25
+```
 
 ---
 
-## Day 7: MCP-Assisted Deep Dive
+## Days 6–7: Weak Area Drilling
 
-With MCP enabled in Claude Code, you can go deep on any topic. Just ask:
+Both sessions each day target domains still below 75%.
+
+```bash
+# Morning
+uv run cert-pepper study --domain <weakest> --count 25
+
+# Check again
+uv run cert-pepper progress
+
+# Afternoon — same domain or next-weakest
+uv run cert-pepper study --domain <weakest> --count 25
+```
+
+**Day 7 PM — MCP deep dive:** once you've drilled enough questions to know which concepts are sticking, use Claude Code to fill the conceptual gaps:
 
 - "I'm weak on PKI. Show me all PKI questions and explain the correct answers."
 - "What acronyms should I know for cryptography?"
-- "I have 3 days until the exam. What should I focus on?"
 - "Explain the difference between IDS and IPS in the context of Security+."
 - "Show me every question that covers access control and quiz me on them."
 
 ---
 
-## Day 8: Full Adaptive Session
+## Day 8: Full Adaptive
 
-Mix all domains in one long session. The adaptive selector weights questions by domain weight and your historical accuracy.
+Both sessions, no domain filter. By this point you'll mostly see review cards — that's expected.
 
 ```bash
-uv run cert-pepper study --count 30
-```
+# Morning
+uv run cert-pepper study --count 25
 
-By Day 8 you should be seeing mostly review cards (FSRS scheduled repeats) rather than new questions, which means you've seen all questions at least once.
+# Afternoon
+uv run cert-pepper study --count 25
+```
 
 ---
 
 ## Day 9: Mock Exam
 
-Run a full timed exam simulation:
+Run a full timed simulation:
 
 ```bash
 uv run cert-pepper exam
 ```
 
-This presents 90 questions in 90 minutes with no hints. At the end it shows your score, domain breakdown, and which questions you missed.
-
-A mock score above 750 is a reasonable benchmark, but mock performance does not guarantee real exam results.
+90 questions, 90 minutes, no hints. Target: 750+. Review missed questions afterward — look for patterns across domains rather than re-reading every wrong answer.
 
 ---
 
-## Day 10: Final Push
+## Day 10: Due Cards Only
 
-Review only the cards due today. In Claude Code:
+Only cards due for review today appear. No new questions, no cramming.
+
+```bash
+uv run cert-pepper study --count 25
+```
+
+Or in Claude Code:
 
 - "Show me my cards due for review today and quiz me on them."
 - "Which domains am I still weakest in?"
-- "Give me 10 quick-fire questions on my worst domain."
 
-Via CLI:
-
-```bash
-uv run cert-pepper study --count 15
-```
-
-Overdue cards come first.
-
-Focus on domains still below 75%. Then rest.
+Then rest.
 
 ---
 
