@@ -78,18 +78,17 @@ For the Security+ example content included in this repo, `CONTENT_ROOT` defaults
 
 ---
 
-## Days 1–4: Domain Sweep
+## Days 1–4: Study Sessions
 
-Work through the four highest-weight domains in order: D4 (28%) → D2 (22%) → D5 (20%) → D3 (18%). Domain 1 (12%) is the lightest — questions from it appear during adaptive sessions on mixed days.
+Run two sessions per day. The tool selects questions based on domain weight and your historical accuracy, so higher-weight domains come up more often by default.
 
-Each day runs two sessions against that day's domain:
+```bash
+# Morning
+uv run cert-pepper study --count 25
 
-| Day | Domain | AM session | PM session |
-|-----|--------|-----------|-----------|
-| 1 | Security Operations (D4) | `uv run cert-pepper study --domain 4 --count 25` | same |
-| 2 | Threats & Vulnerabilities (D2) | `uv run cert-pepper study --domain 2 --count 25` | same |
-| 3 | Program Management (D5) | `uv run cert-pepper study --domain 5 --count 25` | same |
-| 4 | Security Architecture (D3) | `uv run cert-pepper study --domain 3 --count 25` | same |
+# Afternoon
+uv run cert-pepper study --count 25
+```
 
 After each PM session, check where you stand:
 
@@ -107,9 +106,9 @@ Domain 2: ██████░░░░ 61%  ← needs work
 
 ---
 
-## Day 5: Mixed Adaptive + Weak Area Identification
+## Day 5: Weak Area Identification
 
-Shift from domain-focused sessions to adaptive mode. Questions are weighted by domain weight and your historical accuracy.
+By now you have enough history to spot patterns. Run the AM session as usual, then check your accuracy by domain before the PM session.
 
 **AM session:**
 
