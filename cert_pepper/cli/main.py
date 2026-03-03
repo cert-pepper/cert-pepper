@@ -150,6 +150,51 @@ def progress(
     asyncio.run(show_dashboard(exam_code=exam))
 
 
+@app.command("upgrade")
+def upgrade(
+    skip_ingest: bool = typer.Option(False, "--skip-ingest", help="Skip content re-ingestion."),
+    content_root: str | None = typer.Option(
+        None, "--content-root", help="Override content root path."
+    ),
+) -> None:
+    """Apply DB migrations and refresh study content. Safe to run on existing databases."""
+    import asyncio
+
+    from rich.console import Console
+    from rich.table import Table
+
+    from cert_pepper.config import Settings, get_settings
+    from cert_pepper.db.connection import get_session, init_db
+    from cert_pepper.ingestion.loader import run_ingestion
+
+    console = Console()
+    console.print("[cyan]Applying database migrations...[/cyan]")
+    asyncio.run(init_db())
+    console.print("[green]✓ Schema up to date[/green]")
+
+    if not skip_ingest:
+        settings = get_settings()
+        if content_root:
+            from pathlib import Path
+            settings = Settings(content_root=Path(content_root))
+        console.print(f"[cyan]Re-ingesting content from: {settings.content_root}[/cyan]")
+
+        async def _run() -> dict[str, int]:
+            async with get_session() as session:
+                return await run_ingestion(session, settings)
+
+        counts = asyncio.run(_run())
+        table = Table(title="Content Updated", show_header=True)
+        table.add_column("Type", style="cyan")
+        table.add_column("Count", justify="right", style="green")
+        table.add_row("Questions", str(counts["questions"]))
+        table.add_row("Flashcards", str(counts["flashcards"]))
+        table.add_row("Acronyms", str(counts["acronyms"]))
+        console.print(table)
+
+    console.print("[bold green]✓ Upgrade complete. Study progress preserved.[/bold green]")
+
+
 @app.command("pregenerate")
 def pregenerate(
     domain: int | None = typer.Option(

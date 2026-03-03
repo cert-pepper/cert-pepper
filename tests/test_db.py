@@ -269,3 +269,39 @@ class TestMigrations:
         await engine.dispose()
         _conn_module._engine = None
         _conn_module._session_factory = None
+
+    async def test_run_migrations_returns_empty_list_on_fresh_db(self, db):
+        """Fresh DB (schema.sql already has new columns) → no migrations applied."""
+        applied = await _run_migrations()
+        assert applied == []
+
+    async def test_run_migrations_returns_names_on_legacy_db(self, tmp_path, monkeypatch):
+        """Legacy DB without certification_id → migration names returned."""
+        from pathlib import Path
+
+        db_path = tmp_path / "legacy2.db"
+        monkeypatch.setenv("DB_PATH", str(db_path))
+        _conn_module._engine = None
+        _conn_module._session_factory = None
+
+        from cert_pepper.db.connection import get_engine
+
+        engine = get_engine()
+        async with engine.begin() as conn:
+            for stmt in [
+                "CREATE TABLE IF NOT EXISTS certifications (id INTEGER PRIMARY KEY)",
+                "CREATE TABLE IF NOT EXISTS flashcards (id INTEGER PRIMARY KEY, front TEXT, back TEXT, tip TEXT)",
+                "CREATE TABLE IF NOT EXISTS acronyms (id INTEGER PRIMARY KEY, acronym TEXT UNIQUE, full_term TEXT, category TEXT)",
+                "CREATE TABLE IF NOT EXISTS study_sessions (id INTEGER PRIMARY KEY, user_id INTEGER, session_type TEXT)",
+                "CREATE TABLE IF NOT EXISTS predicted_scores (id INTEGER PRIMARY KEY, user_id INTEGER, predicted_score INTEGER)",
+            ]:
+                await conn.execute(text(stmt))
+
+        applied = await _run_migrations()
+
+        assert len(applied) == 4
+        assert all(isinstance(name, str) for name in applied)
+
+        await engine.dispose()
+        _conn_module._engine = None
+        _conn_module._session_factory = None

@@ -94,24 +94,40 @@ async def init_db() -> None:
     await _seed_defaults()
 
 
-async def _run_migrations() -> None:
-    """Add new columns to existing tables. Idempotent: swallows duplicate column errors."""
+async def _run_migrations() -> list[str]:
+    """Add new columns to existing tables. Idempotent: swallows duplicate column errors.
+
+    Returns names of migrations actually applied (empty if already up-to-date).
+    """
     migrations = [
-        "ALTER TABLE flashcards ADD COLUMN certification_id INTEGER REFERENCES certifications(id)",
-        "ALTER TABLE acronyms ADD COLUMN certification_id INTEGER REFERENCES certifications(id)",
-        "ALTER TABLE study_sessions ADD COLUMN certification_id INTEGER"
-        " REFERENCES certifications(id)",
-        "ALTER TABLE predicted_scores ADD COLUMN certification_id INTEGER"
-        " REFERENCES certifications(id)",
+        (
+            "add certification_id to flashcards",
+            "ALTER TABLE flashcards ADD COLUMN certification_id INTEGER REFERENCES certifications(id)",
+        ),
+        (
+            "add certification_id to acronyms",
+            "ALTER TABLE acronyms ADD COLUMN certification_id INTEGER REFERENCES certifications(id)",
+        ),
+        (
+            "add certification_id to study_sessions",
+            "ALTER TABLE study_sessions ADD COLUMN certification_id INTEGER REFERENCES certifications(id)",
+        ),
+        (
+            "add certification_id to predicted_scores",
+            "ALTER TABLE predicted_scores ADD COLUMN certification_id INTEGER REFERENCES certifications(id)",
+        ),
     ]
+    applied: list[str] = []
     engine = get_engine()
     async with engine.begin() as conn:
-        for stmt in migrations:
+        for name, stmt in migrations:
             try:
                 await conn.execute(text(stmt))
+                applied.append(name)
             except Exception as e:
                 if "duplicate column name" not in str(e).lower():
                     raise
+    return applied
 
 
 async def _seed_defaults() -> None:
