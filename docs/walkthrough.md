@@ -84,10 +84,10 @@ Run two sessions per day. The tool selects questions based on domain weight and 
 
 ```bash
 # Morning
-uv run cert-pepper study --count 25
+uv run cert-pepper study
 
 # Afternoon
-uv run cert-pepper study --count 25
+uv run cert-pepper study
 ```
 
 After each PM session, check where you stand:
@@ -113,7 +113,7 @@ By now you have enough history to spot patterns. Run the AM session as usual, th
 **AM session:**
 
 ```bash
-uv run cert-pepper study --count 25
+uv run cert-pepper study
 ```
 
 **After AM session:**
@@ -125,7 +125,7 @@ uv run cert-pepper progress   # identify domains below 70%
 **PM session — target the weakest domain:**
 
 ```bash
-uv run cert-pepper study --domain <weakest> --count 25
+uv run cert-pepper study --domain <weakest>
 ```
 
 ---
@@ -136,13 +136,13 @@ Both sessions each day target domains still below 75%.
 
 ```bash
 # Morning
-uv run cert-pepper study --domain <weakest> --count 25
+uv run cert-pepper study --domain <weakest>
 
 # Check again
 uv run cert-pepper progress
 
 # Afternoon — same domain or next-weakest
-uv run cert-pepper study --domain <weakest> --count 25
+uv run cert-pepper study --domain <weakest>
 ```
 
 **Day 7 PM — MCP deep dive:** once you've drilled enough questions to know which concepts are sticking, use Claude Code to fill the conceptual gaps:
@@ -160,10 +160,10 @@ Both sessions, no domain filter. By this point you'll mostly see review cards �
 
 ```bash
 # Morning
-uv run cert-pepper study --count 25
+uv run cert-pepper study
 
 # Afternoon
-uv run cert-pepper study --count 25
+uv run cert-pepper study
 ```
 
 ---
@@ -185,7 +185,7 @@ uv run cert-pepper exam
 Only cards due for review today appear. No new questions, no cramming.
 
 ```bash
-uv run cert-pepper study --count 25
+uv run cert-pepper study
 ```
 
 Or in Claude Code:
