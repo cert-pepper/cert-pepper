@@ -162,3 +162,9 @@ Flashcards: `**Term** → Definition | Memory tip` (tip is optional, separated b
 Acronyms: Markdown table rows `| ACRONYM | Full Term |` under `## Category` headers.
 
 Full format documentation: [docs/content-format.md](docs/content-format.md)
+
+## Skills
+
+| Skill file | Model | When to use |
+|---|---|---|
+| `ci-watcher.md` | Haiku, background | After every `git push` — **mandatory** |

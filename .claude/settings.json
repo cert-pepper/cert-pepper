@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash -c 'cd /home/ubuntu/github/security-plus/cert-pepper && ruff check --fix \"$FILE\" && ruff format \"$FILE\"' 2>/dev/null || true"
+            "command": "bash -c 'cd /home/ubuntu/github/cert-pepper && ruff check --fix \"$FILE\" && ruff format \"$FILE\"' 2>/dev/null || true"
           }
         ]
       }
