@@ -98,22 +98,24 @@ async def select_question(
     if row:
         return int(row[0])
 
-    # 3. Unseen questions — weighted by domain priority
+    # 3. Unseen questions — one random candidate per domain, then weighted selection
     result = await session.execute(
         text("""
-            SELECT q.id, d.number as domain_num
-            FROM questions q
-            JOIN domains d ON d.id = q.domain_id
-            WHERE NOT EXISTS (
-                SELECT 1 FROM fsrs_cards fc
-                WHERE fc.content_type = 'question'
-                AND fc.content_id = q.id
-                AND fc.user_id = :user_id
+            WITH ranked AS (
+                SELECT q.id, d.number AS domain_num,
+                       ROW_NUMBER() OVER (PARTITION BY d.number ORDER BY RANDOM()) AS rn
+                FROM questions q
+                JOIN domains d ON d.id = q.domain_id
+                WHERE NOT EXISTS (
+                    SELECT 1 FROM fsrs_cards fc
+                    WHERE fc.content_type = 'question'
+                    AND fc.content_id = q.id
+                    AND fc.user_id = :user_id
+                )
+                AND d.certification_id = :cert_id
+                AND (:domain_filter IS NULL OR d.number = :domain_filter)
             )
-            AND d.certification_id = :cert_id
-            AND (:domain_filter IS NULL OR d.number = :domain_filter)
-            ORDER BY d.weight_pct DESC, RANDOM()
-            LIMIT 20
+            SELECT id, domain_num FROM ranked WHERE rn = 1
         """),
         params,
     )

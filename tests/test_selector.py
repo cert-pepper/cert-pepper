@@ -154,6 +154,38 @@ class TestSelectQuestion:
 
         assert result is None
 
+    async def test_weighted_selection_spans_multiple_domains(self, db):
+        """Domain 4 (28%) cannot dominate 100% when other domains have unseen questions.
+
+        Seeds 25 questions in domain 4 and 25 in domain 1. Runs select_question
+        50 times. With the bug (ORDER BY weight_pct DESC LIMIT 20), domain 1 never
+        appears. With the fix (stratified per-domain sampling), both domains appear.
+        """
+        async with get_session() as session:
+            user_id = await get_user_id(session)
+            cert_id = await get_cert_id(session, "SY0-701")
+            for n in range(1, 26):
+                await seed_question(session, domain_number=4, number=n)
+            for n in range(1, 26):
+                await seed_question(session, domain_number=1, number=n + 100)
+            await session.commit()
+
+        seen_domains: set[int] = set()
+        async with get_session() as session:
+            user_id = await get_user_id(session)
+            cert_id = await get_cert_id(session, "SY0-701")
+            for _ in range(50):
+                result = await select_question(session, user_id, cert_id=cert_id)
+                assert result is not None
+                row = await session.execute(
+                    text("SELECT d.number FROM questions q JOIN domains d ON d.id = q.domain_id WHERE q.id = :qid"),
+                    {"qid": result},
+                )
+                seen_domains.add(row.scalar())
+
+        assert 4 in seen_domains, "Domain 4 was never selected"
+        assert 1 in seen_domains, "Domain 1 was never selected (bug: high-weight domain monopolizes LIMIT)"
+
 
 # ---------------------------------------------------------------------------
 # select_exam_questions
