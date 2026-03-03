@@ -1,6 +1,6 @@
 [project]
 name = "cert-pepper"
-version = "0.1.0"
+dynamic = ["version"]
 description = "AI-powered adaptive certification prep that learns what you don't know."
 readme = "README.md"
 license = { text = "MIT" }
@@ -41,8 +41,14 @@ cert-pepper-content-mcp = "cert_pepper.mcp.content:serve"
 cert-pepper-analytics-mcp = "cert_pepper.mcp.analytics:serve"
 
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling", "hatch-vcs"]
 build-backend = "hatchling.build"
+
+[tool.hatch.version]
+source = "vcs"
+
+[tool.hatch.build.hooks.vcs]
+version-file = "cert_pepper/_version.py"
 
 [dependency-groups]
 dev = [
