@@ -2,9 +2,11 @@
 
 AI-powered adaptive certification prep. Learns what you don't know.
 
-cert-pepper ingests your exam content (questions, flashcards, acronyms) into SQLite and runs an adaptive study loop using **FSRS-4.5 spaced repetition** and **Bayesian Knowledge Tracing**. Wrong answers get AI explanations from Claude. Three MCP servers expose the study engine, content, and analytics to Claude Code.
+cert-pepper ingests your exam content (questions, flashcards, acronyms) into SQLite and runs an adaptive study loop using **FSRS-4.5 spaced repetition** and **Bayesian Knowledge Tracing**. Wrong answers get AI explanations from Claude. Three MCP servers connect the study engine, content, and analytics to Claude Code.
 
-**Worked example:** [Passing Security+ SY0-701 in 10 days](docs/walkthrough.md)
+> **No guarantees.** cert-pepper is a study tool. Predicted scores and pass probabilities are estimates based on your practice performance — they are not predictions of real exam outcomes. Use at your own risk.
+
+**Worked example:** [Security+ SY0-701: 10-day study plan](docs/walkthrough.md)
 
 ---
 
@@ -30,7 +32,7 @@ Open the repo in **Claude Code** (see [MCP Integration](#mcp-integration) to ena
 
 > Set up a question bank for the CISSP exam
 
-Claude runs `setup_exam`, generates ~90 AI-written practice questions per domain, and loads them into the database. Then start studying:
+Claude generates ~90 practice questions per domain and loads them into the database. Then start studying:
 
 ```bash
 uv run cert-pepper study
@@ -65,7 +67,7 @@ Three STDIO MCP servers are registered in `.mcp.json`. After `uv sync` they are 
 
 Enable them in Claude Code by adding `enableAllProjectMcpServers: true` to `.claude/settings.local.json`, then open a new session in this repo.
 
-The `get_explanation` MCP tool generates AI explanations via MCP sampling — no `ANTHROPIC_API_KEY` required when using Claude Code.
+In Claude Code, explanations are generated via MCP sampling — no `ANTHROPIC_API_KEY` needed.
 
 Test a server directly:
 ```bash
@@ -90,7 +92,7 @@ The Security+ content in `examples/security-plus/` is a complete reference imple
 |----------|---------|-------------|
 | `DB_PATH` | `./cert_pepper.db` | SQLite database path |
 | `CONTENT_ROOT` | `./examples/security-plus` | Root of your exam content |
-| `ANTHROPIC_API_KEY` | — | Required for CLI AI explanations (`study`, `pregenerate`). Not needed when using MCP tools from Claude Code. |
+| `ANTHROPIC_API_KEY` | — | Required for CLI AI explanations (`study`, `pregenerate`). Not needed in Claude Code. |
 | `HAIKU_MODEL` | `claude-haiku-4-5-20251001` | Model for AI explanations |
 | `SONNET_MODEL` | `claude-sonnet-4-6` | Model for MCP sampling |
 | `DEFAULT_SESSION_SIZE` | `10` | Questions per study session |

@@ -1,8 +1,8 @@
-# Passing Security+ SY0-701 with cert-pepper: A 10-Day Walkthrough
+# Preparing for Security+ SY0-701 with cert-pepper: A 10-Day Example
 
-This guide documents an actual 10-day study run using cert-pepper to prepare for CompTIA Security+ SY0-701. The exam has 5 domains, 90 questions, a 90-minute time limit, and a passing score of 750/900.
+This guide describes an example 10-day study plan using cert-pepper for CompTIA Security+ SY0-701. The exam has 5 domains, 90 questions, a 90-minute time limit, and a passing score of 750/900. cert-pepper does not guarantee exam results — outcomes depend on your prior knowledge, study effort, and exam conditions.
 
-This walkthrough assumes you're using **Claude Code with MCP enabled** — that's the recommended path. A manual CLI alternative is noted where it differs.
+This walkthrough assumes you're using **Claude Code with MCP enabled** — that's the recommended path. A manual CLI alternative is included in each section.
 
 ---
 
@@ -36,7 +36,7 @@ Open the repo in Claude Code. MCP servers start automatically (`.mcp.json` is al
 Set up a question bank for CompTIA Security+ SY0-701
 ```
 
-Claude calls `setup_exam` behind the scenes, initialises the database, and confirms when it's ready. No manual `db init` or `ingest` step needed.
+Claude sets up the database and confirms when it's ready.
 
 Verify everything loaded:
 
@@ -63,13 +63,13 @@ For the Security+ example content included in this repo, `CONTENT_ROOT` defaults
 
 ## Days 1–4: Domain Study
 
-Run a study session each day — no flags needed. The adaptive selector already knows which domains need the most work:
+Run a study session each day:
 
 ```bash
 uv run cert-pepper study
 ```
 
-The selector weights questions by domain weight and your historical accuracy, so high-weight domains (Security Operations at 28%, Threats at 22%) surface more often automatically. You don't need to manually schedule by domain.
+The selector weights questions by domain weight and your historical accuracy, so high-weight domains (Security Operations at 28%, Threats at 22%) come up more often.
 
 During each session:
 - Unseen questions appear first; questions you got wrong come back sooner (FSRS scheduling).
@@ -92,7 +92,7 @@ Domain 2: ██████░░░░ 61%  ← needs work
 
 ## Days 5–6: Weak Area Drill
 
-Use `get_weak_areas` from the analytics MCP server, or read the `progress` dashboard to identify domains below 70%.
+Run `cert-pepper progress` to find domains below 70%.
 
 ```bash
 # Focused drill on weakest domain
@@ -102,21 +102,19 @@ uv run cert-pepper study --domain 2 --count 20
 uv run cert-pepper progress
 ```
 
-The FSRS scheduler automatically surfaces overdue cards — questions you got wrong come back sooner. You don't need to track them manually.
+Questions you got wrong come back sooner — FSRS handles the scheduling.
 
 ---
 
 ## Day 7: MCP-Assisted Deep Dive
 
-With MCP enabled in Claude Code, you can do a natural-language deep dive on any topic. Just ask — no tool names needed. Example prompts:
+With MCP enabled in Claude Code, you can go deep on any topic. Just ask:
 
 - "I'm weak on PKI. Show me all PKI questions and explain the correct answers."
 - "What acronyms should I know for cryptography?"
 - "I have 3 days until the exam. What should I focus on?"
 - "Explain the difference between IDS and IPS in the context of Security+."
 - "Show me every question that covers access control and quiz me on them."
-
-Claude uses the search, explanation, acronym, and analytics tools behind the scenes.
 
 ---
 
@@ -128,7 +126,7 @@ Mix all domains in one long session. The adaptive selector weights questions by 
 uv run cert-pepper study --count 30
 ```
 
-By Day 8 you should be seeing mostly review cards (FSRS scheduled repeats) rather than new questions, which means you've covered the material.
+By Day 8 you should be seeing mostly review cards (FSRS scheduled repeats) rather than new questions, which means you've seen all questions at least once.
 
 ---
 
@@ -142,7 +140,7 @@ uv run cert-pepper exam
 
 This presents 90 questions in 90 minutes with no hints. At the end it shows your score, domain breakdown, and which questions you missed.
 
-Target: score above 750 on the mock before sitting the real exam.
+A mock score above 750 is a reasonable benchmark, but mock performance does not guarantee real exam results.
 
 ---
 
@@ -160,15 +158,15 @@ Via CLI:
 uv run cert-pepper study --count 15
 ```
 
-FSRS decides what to show — it will surface overdue cards first.
+Overdue cards come first.
 
-Focus on domains still below 75%. Then rest — you've done the work.
+Focus on domains still below 75%. Then rest.
 
 ---
 
-## Results
+## Results (Illustrative)
 
-After 10 days, the predicted score and pass probability from `progress` should look roughly like:
+The numbers below are made up — they show what the `progress` output format looks like, not what any particular user should expect. Your results depend entirely on your prior knowledge, how many questions you answer, and how you perform.
 
 ```
 Predicted score:    812 / 900
@@ -176,12 +174,12 @@ Pass probability:   94%
 Weakest domain:     Domain 3 (Security Architecture) — 71%
 ```
 
-The predicted score is calculated as: `Σ(domain_accuracy × domain_weight) × 900`. Pass probability uses a logistic sigmoid centered at 750.
+The predicted score is calculated as: `Σ(domain_accuracy × domain_weight) × 900`. Pass probability uses a logistic sigmoid centered at 750. Neither figure predicts your real exam result.
 
 ---
 
 ## What's Next
 
 - Add more practice questions to underrepresented domains (Domains 3 and 5 have none yet).
-- Run `cert-pepper pregenerate` to pre-cache AI explanations for all wrong-answer combinations (requires `ANTHROPIC_API_KEY`). Skip this if you're using Claude Code — the `get_explanation` MCP tool generates explanations on demand without an API key.
+- Run `cert-pepper pregenerate` to pre-cache AI explanations for all wrong-answer combinations (requires `ANTHROPIC_API_KEY`). In Claude Code, explanations are generated on demand — skip `pregenerate`.
 - Use `exam` for a second mock run the morning of the exam.

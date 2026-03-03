@@ -168,3 +168,4 @@ Full format documentation: [docs/content-format.md](docs/content-format.md)
 | Skill file | Model | When to use |
 |---|---|---|
 | `ci-watcher.md` | Haiku, background | After every `git push` — **mandatory** |
+| `doc-editor/SKILL.md` | (inherits) | Before every `Edit` or `Write` to a `.md` file — **mandatory** |
