@@ -8,6 +8,7 @@ Pass probability uses logistic function centered on 750.
 from __future__ import annotations
 
 import math
+from datetime import date, timedelta
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,6 +18,28 @@ from cert_pepper.models.analytics import (
     StudyRecommendation,
     WeakArea,
 )
+
+
+def compute_streak(dates: list[date]) -> int:
+    """Count consecutive study days ending today or yesterday (grace period).
+
+    Args:
+        dates: Study dates sorted descending, deduplicated.
+    """
+    if not dates:
+        return 0
+    today = date.today()
+    yesterday = today - timedelta(days=1)
+    if dates[0] not in (today, yesterday):
+        return 0
+    streak = 1
+    for i in range(1, len(dates)):
+        if dates[i] == dates[i - 1] - timedelta(days=1):
+            streak += 1
+        else:
+            break
+    return streak
+
 
 PASSING_SCORE = 750
 MAX_SCORE = 900

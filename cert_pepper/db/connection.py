@@ -102,19 +102,19 @@ async def _run_migrations() -> list[str]:
     migrations = [
         (
             "add certification_id to flashcards",
-            "ALTER TABLE flashcards ADD COLUMN certification_id INTEGER REFERENCES certifications(id)",
+            "ALTER TABLE flashcards ADD COLUMN certification_id INTEGER REFERENCES certifications(id)",  # noqa: E501
         ),
         (
             "add certification_id to acronyms",
-            "ALTER TABLE acronyms ADD COLUMN certification_id INTEGER REFERENCES certifications(id)",
+            "ALTER TABLE acronyms ADD COLUMN certification_id INTEGER REFERENCES certifications(id)",  # noqa: E501
         ),
         (
             "add certification_id to study_sessions",
-            "ALTER TABLE study_sessions ADD COLUMN certification_id INTEGER REFERENCES certifications(id)",
+            "ALTER TABLE study_sessions ADD COLUMN certification_id INTEGER REFERENCES certifications(id)",  # noqa: E501
         ),
         (
             "add certification_id to predicted_scores",
-            "ALTER TABLE predicted_scores ADD COLUMN certification_id INTEGER REFERENCES certifications(id)",
+            "ALTER TABLE predicted_scores ADD COLUMN certification_id INTEGER REFERENCES certifications(id)",  # noqa: E501
         ),
     ]
     applied: list[str] = []

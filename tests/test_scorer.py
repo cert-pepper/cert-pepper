@@ -14,7 +14,10 @@ import pytest
 from sqlalchemy import text
 
 from cert_pepper.db.connection import get_session
+from datetime import date, timedelta
+
 from cert_pepper.engine.scorer import (
+    compute_streak,
     get_domain_accuracies,
     predict_score,
     get_weak_areas,
@@ -26,6 +29,40 @@ from tests.conftest import (
     seed_certification, seed_domains_for_cert, get_cert_id,
     seed_question, seed_attempt, seed_session, get_user_id,
 )
+
+
+# ---------------------------------------------------------------------------
+# compute_streak
+# ---------------------------------------------------------------------------
+
+class TestComputeStreak:
+    def test_empty_returns_zero(self):
+        assert compute_streak([]) == 0
+
+    def test_studied_today_only(self):
+        assert compute_streak([date.today()]) == 1
+
+    def test_studied_yesterday_only(self):
+        assert compute_streak([date.today() - timedelta(days=1)]) == 1
+
+    def test_two_days_ago_only_returns_zero(self):
+        assert compute_streak([date.today() - timedelta(days=2)]) == 0
+
+    def test_consecutive_from_today(self):
+        today = date.today()
+        assert compute_streak([today - timedelta(days=i) for i in range(5)]) == 5
+
+    def test_consecutive_from_yesterday(self):
+        yesterday = date.today() - timedelta(days=1)
+        assert compute_streak([yesterday - timedelta(days=i) for i in range(4)]) == 4
+
+    def test_gap_breaks_streak(self):
+        today = date.today()
+        assert compute_streak([today, today - timedelta(days=3)]) == 1
+
+    def test_long_streak(self):
+        today = date.today()
+        assert compute_streak([today - timedelta(days=i) for i in range(100)]) == 100
 
 
 # ---------------------------------------------------------------------------

@@ -2,13 +2,20 @@
 
 from __future__ import annotations
 
+from datetime import date as date_type
+
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 from sqlalchemy import text
 
 from cert_pepper.db.connection import get_session
-from cert_pepper.engine.scorer import get_recommendations, get_weak_areas, predict_score
+from cert_pepper.engine.scorer import (
+    compute_streak,
+    get_recommendations,
+    get_weak_areas,
+    predict_score,
+)
 
 console = Console()
 
@@ -103,15 +110,15 @@ async def show_dashboard(exam_code: str | None = None) -> None:
         # Get study streak
         result = await session.execute(
             text("""
-                SELECT COUNT(DISTINCT date(started_at))
+                SELECT DISTINCT date(started_at) as study_date
                 FROM study_sessions
-                WHERE user_id=:uid AND started_at >= datetime('now', '-30 days')
-                AND questions_seen > 0
+                WHERE user_id=:uid AND questions_seen > 0
+                ORDER BY study_date DESC
             """),
             {"uid": user_id},
         )
-        streak_row = result.fetchone()
-        streak = streak_row[0] if streak_row else 0
+        study_dates = [date_type.fromisoformat(row[0]) for row in result.fetchall()]
+        streak = compute_streak(study_dates)
 
     # === Render Dashboard ===
     console.print()
@@ -144,7 +151,7 @@ async def show_dashboard(exam_code: str | None = None) -> None:
     stats_table.add_row(
         "Cards Due Today", f"[yellow]{cards_due}[/yellow]" if cards_due > 0 else "0"
     )
-    stats_table.add_row("Study Days (30d)", str(streak))
+    stats_table.add_row("Study Streak", f"{streak} day{'s' if streak != 1 else ''}")
     console.print(stats_table)
     console.print()
 
