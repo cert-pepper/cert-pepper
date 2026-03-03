@@ -2,7 +2,7 @@
 
 This guide documents an actual 10-day study run using cert-pepper to prepare for CompTIA Security+ SY0-701. The exam has 5 domains, 90 questions, a 90-minute time limit, and a passing score of 750/900.
 
-All commands run from the repo root after `uv sync`.
+This walkthrough assumes you're using **Claude Code with MCP enabled** — that's the recommended path. A manual CLI alternative is noted where it differs.
 
 ---
 
@@ -22,60 +22,58 @@ Passing score: **750 / 900** (~83%). Study time is best allocated proportional t
 
 ## Day 0: Setup
 
+### Primary path — Claude Code with MCP
+
 ```bash
 git clone https://github.com/crook3dfingers/cert-pepper.git
 cd cert-pepper
-cp .env.example .env
-# Optional: add ANTHROPIC_API_KEY to .env for AI explanations
 uv sync
-uv run cert-pepper db init
-uv run cert-pepper ingest
 ```
 
-Verify everything is loaded:
+Open the repo in Claude Code. MCP servers start automatically (`.mcp.json` is already configured). Then ask Claude to set up your question bank:
+
+```
+Set up a question bank for CompTIA Security+ SY0-701
+```
+
+Claude calls `setup_exam` behind the scenes, initialises the database, and confirms when it's ready. No manual `db init` or `ingest` step needed.
+
+Verify everything loaded:
+
+```
+Show me my study progress
+```
+
+Expected reply: 0 questions answered, no predicted score yet — that's correct.
+
+### Alternative path — manual CLI
+
+Use this if you're not running Claude Code or want to bring your own exam content:
 
 ```bash
-uv run cert-pepper progress
+cp .env.example .env
+# Set CONTENT_ROOT in .env to point at your exam content directory
+uv run cert-pepper db init
+uv run cert-pepper ingest   # ingests whatever CONTENT_ROOT points to
 ```
 
-Expected output:
-
-```
-┌─────────────────────────────────────┐
-│         Study Progress              │
-│  Questions answered: 0              │
-│  Predicted score: —                 │
-│  Pass probability: —                │
-└─────────────────────────────────────┘
-No attempts yet. Run `cert-pepper study` to begin.
-```
-
-The DB now has 30 questions, 74 flashcards, and 138 acronyms.
+For the Security+ example content included in this repo, `CONTENT_ROOT` defaults to `examples/security-plus/`, which loads 160 questions, 74 flashcards, and 138 acronyms.
 
 ---
 
 ## Days 1–4: Domain Study
 
-Work through each domain in weight order (4 → 2 → 5 → 3 → 1). Start with domain notes, then drill with the adaptive study session.
+Run a study session each day — no flags needed. The adaptive selector already knows which domains need the most work:
 
 ```bash
-# Day 1: Domain 4 (Security Operations — 28%)
-uv run cert-pepper study --domain 4 --count 15
-
-# Day 2: Domain 2 (Threats, Vulnerabilities — 22%)
-uv run cert-pepper study --domain 2 --count 15
-
-# Day 3: Domain 5 (Program Management — 20%)
-uv run cert-pepper study --domain 5 --count 10
-
-# Day 4: Domain 3 + Domain 1
-uv run cert-pepper study --domain 3 --count 10
-uv run cert-pepper study --domain 1 --count 10
+uv run cert-pepper study
 ```
 
+The selector weights questions by domain weight and your historical accuracy, so high-weight domains (Security Operations at 28%, Threats at 22%) surface more often automatically. You don't need to manually schedule by domain.
+
 During each session:
-- The adaptive selector presents unseen questions first, then repeats questions you got wrong sooner.
-- Wrong answers trigger an AI explanation from Claude. If `ANTHROPIC_API_KEY` is set, the CLI generates it directly. When using the MCP tools in Claude Code, explanations work without an API key.
+- Unseen questions appear first; questions you got wrong come back sooner (FSRS scheduling).
+- Wrong answers trigger an AI explanation from Claude. When using Claude Code with MCP, explanations work without an API key.
 - After each session, check `progress` to see which domains are weakest.
 
 ```bash
@@ -110,25 +108,15 @@ The FSRS scheduler automatically surfaces overdue cards — questions you got wr
 
 ## Day 7: MCP-Assisted Deep Dive
 
-With the MCP servers running in Claude Code, you can ask questions about specific topics mid-study.
+With MCP enabled in Claude Code, you can do a natural-language deep dive on any topic. Just ask — no tool names needed. Example prompts:
 
-Enable MCP servers in `.claude/settings.local.json`:
-```json
-{ "enableAllProjectMcpServers": true }
-```
+- "I'm weak on PKI. Show me all PKI questions and explain the correct answers."
+- "What acronyms should I know for cryptography?"
+- "I have 3 days until the exam. What should I focus on?"
+- "Explain the difference between IDS and IPS in the context of Security+."
+- "Show me every question that covers access control and quiz me on them."
 
-Open a new Claude Code session in the repo, then use the tools:
-
-- **`search_questions`** — find questions on a specific topic ("What questions cover PKI?")
-- **`get_explanation`** — get an AI explanation for any question (no API key required; uses MCP sampling via Claude Code)
-- **`lookup_acronym`** — look up any acronym instantly
-- **`get_study_recommendations`** — prioritized topics given days remaining
-
-Example Claude Code session:
-```
-User: I'm weak on PKI. Show me all PKI questions and explain the correct answers.
-Claude: [uses search_questions, then get_explanation for each]
-```
+Claude uses the search, explanation, acronym, and analytics tools behind the scenes.
 
 ---
 
@@ -160,15 +148,19 @@ Target: score above 750 on the mock before sitting the real exam.
 
 ## Day 10: Final Push
 
-Review only the cards due today (spaced repetition schedule):
+Review only the cards due today. In Claude Code:
+
+- "Show me my cards due for review today and quiz me on them."
+- "Which domains am I still weakest in?"
+- "Give me 10 quick-fire questions on my worst domain."
+
+Via CLI:
 
 ```bash
-# Via MCP
-# get_due_cards tool returns cards scheduled for review today
-
-# Via CLI — study with a short session, let FSRS decide what to show
 uv run cert-pepper study --count 15
 ```
+
+FSRS decides what to show — it will surface overdue cards first.
 
 Focus on domains still below 75%. Then rest — you've done the work.
 
