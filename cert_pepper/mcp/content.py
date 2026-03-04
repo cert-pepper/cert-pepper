@@ -367,7 +367,10 @@ Rules:
 - Exactly 1 correct answer per question.
 - A `---` separator between questions but NOT after the last one.
 - Number questions consecutively starting at the number given in the prompt.
-- Questions must test application/analysis (exam-difficulty), not just recall.\
+- Questions must test application/analysis (exam-difficulty), not just recall.
+- Never expand acronyms in answer options. Use the acronym alone (e.g. "SOAR" not \
+"SOAR — Security Orchestration, Automation, and Response"). Knowing acronym meanings \
+is a core exam skill.\
 """
 
 _QUESTIONS_USER = """\

@@ -161,6 +161,11 @@ Explanation text.
 Flashcards: `**Term** → Definition | Memory tip` (tip is optional, separated by `|`).
 Acronyms: Markdown table rows `| ACRONYM | Full Term |` under `## Category` headers.
 
+### Question authoring rules
+
+- **Never expand acronyms in answer options.** Use the acronym only — e.g. `SOAR`, not `SOAR — Security Orchestration, Automation, and Response`. Candidates must know what acronyms stand for; spelling them out in answers eliminates that test point and makes practice unrealistic.
+- Apply this consistently to all options A–D, regardless of which is correct.
+
 Full format documentation: [docs/content-format.md](docs/content-format.md)
 
 ## Skills (`.claude/skills/`)
