@@ -39,7 +39,7 @@ Parse the current version as `MAJOR.MINOR.PATCH`.
 Tell the user exactly what you are about to do:
 
 > Ready to release **v{new_version}** (current: v{current_version}).
-> This will create an annotated tag and push to origin.
+> This will create an annotated tag, push to origin, and create a GitHub Release.
 > Proceed?
 
 Wait for confirmation. Do not proceed until confirmed.
@@ -57,11 +57,21 @@ git push origin main
 git push origin v{new_version}
 ```
 
-## 7. Report success
+## 7. Create GitHub Release
+
+Use `gh` to create a release from the tag so it appears in GitHub Releases (not just Tags):
+
+```bash
+gh release create v{new_version} --title "v{new_version}" --generate-notes
+```
+
+`--generate-notes` auto-populates the release body from commits since the previous tag.
+
+## 8. Report success
 
 Tell the user:
 
-> Released **v{new_version}**.
+> Released **v{new_version}**: {url returned by gh release create}
 >
 > hatch-vcs will now resolve this version automatically on any `uv build` or `uv tool install --reinstall`.
 > To upgrade an existing install: `uv tool install --reinstall /path/to/cert-pepper`
