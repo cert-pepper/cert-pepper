@@ -16,10 +16,10 @@ from sqlalchemy import text
 from cert_pepper.db.connection import get_session
 from cert_pepper.engine.selector import select_question, select_exam_questions
 
-from cert_pepper.engine.selector import get_domain_weights
+from cert_pepper.engine.selector import get_domain_weights, get_domain_accuracy
 from tests.conftest import (
     seed_certification, seed_domains_for_cert, get_cert_id,
-    seed_question, seed_session, get_user_id,
+    seed_question, seed_session, seed_attempt, get_user_id,
 )
 
 
@@ -336,3 +336,102 @@ class TestMultiCertIsolation:
 
         # All returned IDs should belong to cert B questions
         assert len(cert_b_qs) <= 1  # only 1 question in cert B
+
+
+# ---------------------------------------------------------------------------
+# get_domain_accuracy
+# ---------------------------------------------------------------------------
+
+class TestGetDomainAccuracy:
+    async def test_returns_empty_dict_when_no_attempts(self, db):
+        async with get_session() as session:
+            user_id = await get_user_id(session)
+            cert_id = await get_cert_id(session, "SY0-701")
+            result = await get_domain_accuracy(session, user_id, cert_id)
+        assert result == {}
+
+    async def test_returns_correct_accuracy_per_domain(self, db):
+        async with get_session() as session:
+            user_id = await get_user_id(session)
+            cert_id = await get_cert_id(session, "SY0-701")
+            sid = await seed_session(session, user_id)
+            q1 = await seed_question(session, domain_number=4, number=1)
+            q2 = await seed_question(session, domain_number=4, number=2)
+            q3 = await seed_question(session, domain_number=4, number=3)
+            q4 = await seed_question(session, domain_number=4, number=4)
+            # 3 correct, 1 wrong → accuracy = 0.75
+            await seed_attempt(session, user_id, q1, sid, is_correct=True)
+            await seed_attempt(session, user_id, q2, sid, is_correct=True)
+            await seed_attempt(session, user_id, q3, sid, is_correct=True)
+            await seed_attempt(session, user_id, q4, sid, is_correct=False)
+            await session.commit()
+
+        async with get_session() as session:
+            user_id = await get_user_id(session)
+            cert_id = await get_cert_id(session, "SY0-701")
+            result = await get_domain_accuracy(session, user_id, cert_id)
+
+        assert 4 in result
+        assert result[4] == pytest.approx(0.75, abs=1e-6)
+
+    async def test_missing_domain_not_in_result(self, db):
+        async with get_session() as session:
+            user_id = await get_user_id(session)
+            cert_id = await get_cert_id(session, "SY0-701")
+            sid = await seed_session(session, user_id)
+            q1 = await seed_question(session, domain_number=4, number=1)
+            await seed_attempt(session, user_id, q1, sid, is_correct=True)
+            await session.commit()
+
+        async with get_session() as session:
+            user_id = await get_user_id(session)
+            cert_id = await get_cert_id(session, "SY0-701")
+            result = await get_domain_accuracy(session, user_id, cert_id)
+
+        assert 2 not in result
+
+
+# ---------------------------------------------------------------------------
+# Accuracy-weighted selection
+# ---------------------------------------------------------------------------
+
+class TestAccuracyWeightedSelection:
+    async def test_weak_domain_selected_more_than_strong_domain(self, db):
+        """D4 at 0% acc (28% weight) should dominate D1 at 100% acc (12% weight).
+
+        Effective weights: D4 = 0.28 × 1.0 = 0.28, D1 = 0.12 × 0.1 = 0.012.
+        P(D4 selected) ≈ 0.96 per draw → assert D4 count ≥ D1 count over 50 draws.
+        """
+        async with get_session() as session:
+            user_id = await get_user_id(session)
+            cert_id = await get_cert_id(session, "SY0-701")
+            sid = await seed_session(session, user_id)
+
+            d4_ids = set()
+            for n in range(1, 11):
+                qid = await seed_question(session, domain_number=4, number=n)
+                d4_ids.add(qid)
+                await seed_attempt(session, user_id, qid, sid, is_correct=False)
+
+            d1_ids = set()
+            for n in range(1, 11):
+                qid = await seed_question(session, domain_number=1, number=n + 100)
+                d1_ids.add(qid)
+                await seed_attempt(session, user_id, qid, sid, is_correct=True)
+
+            await session.commit()
+
+        d4_count = 0
+        d1_count = 0
+        async with get_session() as session:
+            user_id = await get_user_id(session)
+            cert_id = await get_cert_id(session, "SY0-701")
+            for _ in range(50):
+                result = await select_question(session, user_id, cert_id=cert_id)
+                assert result is not None
+                if result in d4_ids:
+                    d4_count += 1
+                elif result in d1_ids:
+                    d1_count += 1
+
+        assert d4_count >= d1_count

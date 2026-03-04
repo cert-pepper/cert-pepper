@@ -80,7 +80,7 @@ For the Security+ example content included in this repo, `CONTENT_ROOT` defaults
 
 ## Days 1–4: Study Sessions
 
-Run two sessions per day. The tool selects questions based on domain weight and your historical accuracy, so higher-weight domains come up more often by default.
+Run two sessions per day. Questions are weighted by domain weight scaled down by your accuracy in that domain — domains where you're weakest get proportionally more questions as your history builds.
 
 ```bash
 # Morning
@@ -122,27 +122,27 @@ uv run cert-pepper study
 uv run cert-pepper progress   # identify domains below 70%
 ```
 
-**PM session — target the weakest domain:**
+**PM session:**
 
 ```bash
-uv run cert-pepper study --domain <weakest>
+uv run cert-pepper study
 ```
 
 ---
 
 ## Days 6–7: Weak Area Drilling
 
-Both sessions each day target domains still below 75%.
+Both sessions each day. Domains where accuracy is lowest get more questions.
 
 ```bash
 # Morning
-uv run cert-pepper study --domain <weakest>
+uv run cert-pepper study
 
 # Check again
 uv run cert-pepper progress
 
-# Afternoon — same domain or next-weakest
-uv run cert-pepper study --domain <weakest>
+# Afternoon
+uv run cert-pepper study
 ```
 
 **Day 7 PM — MCP deep dive:** once you've drilled enough questions to know which concepts are sticking, use Claude Code to fill the conceptual gaps:

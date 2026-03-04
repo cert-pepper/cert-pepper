@@ -17,6 +17,26 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
+async def get_domain_accuracy(
+    session: AsyncSession, user_id: int, cert_id: int
+) -> dict[int, float]:
+    """Return {domain_number: accuracy} from all attempts. Missing domains default to 0.0."""
+    result = await session.execute(
+        text("""
+            SELECT d.number,
+                   AVG(CASE WHEN qa.is_correct THEN 1.0 ELSE 0.0 END) AS accuracy
+            FROM question_attempts qa
+            JOIN questions q ON q.id = qa.question_id
+            JOIN domains d ON d.id = q.domain_id
+            WHERE qa.user_id = :user_id
+            AND d.certification_id = :cert_id
+            GROUP BY d.number
+        """),
+        {"user_id": user_id, "cert_id": cert_id},
+    )
+    return {row[0]: float(row[1]) for row in result.fetchall()}
+
+
 async def get_domain_weights(session: AsyncSession, cert_id: int) -> dict[int, float]:
     """Return {domain_number: weight_fraction} from DB for a given certification."""
     result = await session.execute(
@@ -122,7 +142,12 @@ async def select_question(
     rows = result.fetchall()
     if rows:
         domain_weights = await get_domain_weights(session, cert_id)
-        weights = [domain_weights.get(row[1], 0.2) for row in rows]
+        domain_accuracy = await get_domain_accuracy(session, user_id, cert_id)
+        MIN_FLOOR = 0.1
+        weights = [
+            domain_weights.get(row[1], 0.2) * max(MIN_FLOOR, 1.0 - domain_accuracy.get(row[1], 0.0))
+            for row in rows
+        ]
         total = sum(weights)
         if total > 0:
             probs = [w / total for w in weights]
