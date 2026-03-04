@@ -165,7 +165,7 @@ Full format documentation: [docs/content-format.md](docs/content-format.md)
 
 ## Skills (`.claude/skills/`)
 
-Reusable prompts that keep main-context token usage low. To invoke a skill: read the skill file, perform any required substitutions (e.g. replace `<SHA>` with `$(git rev-parse HEAD)`), then pass the result as the `prompt` to a background Haiku Agent call (`model=haiku`, `run_in_background=true`). The task completion notification signals pass/fail.
+Reusable prompts that keep main-context token usage low. To invoke a skill: read the skill file — no substitution needed — pass the skill file content directly as the `prompt` to a background Haiku Agent call (`model=haiku`, `run_in_background=true`). The task completion notification signals pass/fail.
 
 | Skill file | Model | When to use |
 |---|---|---|

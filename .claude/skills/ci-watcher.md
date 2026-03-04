@@ -1,11 +1,10 @@
 # CI Watcher
 
-Poll GitHub check-runs for a specific commit until all checks have a conclusion (up to 20 minutes).
-
-**Required**: The caller must obtain the full 40-character SHA via `git rev-parse HEAD` and substitute it in place of `<SHA>`. Never guess or abbreviate — a wrong SHA causes a silent 422 loop.
+Poll GitHub check-runs for the latest commit until all checks have a conclusion (up to 20
+minutes). Fetches failure logs automatically.
 
 ```bash
-SHA=<SHA>  # must be the full SHA from: git rev-parse HEAD
+SHA=$(git -C /home/ubuntu/github/cert-pepper rev-parse HEAD)
 MAX=40; i=0
 while [ $i -lt $MAX ]; do
   api_err=$(mktemp)
@@ -22,7 +21,14 @@ while [ $i -lt $MAX ]; do
       failed=$(echo "$result" | jq -r 'select(.conclusion == "failure") | .name' 2>/dev/null)
       if [ -n "$failed" ]; then
         echo "CI FAILED — failed checks:"; echo "$failed"
-        echo "Full results:"; echo "$result"
+        GH_TOKEN="$GITHUB_PERSONAL_ACCESS_TOKEN" gh run list \
+          --repo crook3dfingers/cert-pepper --commit "$SHA" \
+          --json databaseId,conclusion \
+          --jq '.[] | select(.conclusion == "failure") | .databaseId' 2>/dev/null \
+          | while read run_id; do
+              GH_TOKEN="$GITHUB_PERSONAL_ACCESS_TOKEN" gh run view "$run_id" \
+                --repo crook3dfingers/cert-pepper --log-failed 2>&1 | tail -60
+            done
         exit 1
       fi
       echo "All checks passed:"; echo "$result"; exit 0
@@ -33,10 +39,11 @@ done
 echo "CI watcher timed out after 20 minutes"; exit 1
 ```
 
+- Gets the SHA itself via `git rev-parse HEAD` — no caller substitution needed.
 - Polls every 30 seconds, up to 40 times (20-minute hard limit).
-- API errors (e.g. 422 from a wrong SHA) are printed and cause an immediate exit 1 — they are not silently swallowed.
-- Empty-response guard: skips iterations where the API returns no check runs (CI not yet registered).
+- Empty-response guard: skips iterations where the API returns nothing (CI not yet registered).
+- API errors (e.g. 422) are printed and cause an immediate exit 1 — not silently swallowed.
+- On failure: prints failed check names then fetches and tails the workflow run logs.
 - Exits non-zero on failure or timeout so the task notification signals failure correctly.
-- Output "CI FAILED" with the failed check names, or "All checks passed" with the full results.
 
 Note: use `$GITHUB_PERSONAL_ACCESS_TOKEN`, NOT `$GITHUB_TOKEN` — the latter is MCP-only.
