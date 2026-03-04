@@ -410,6 +410,26 @@ async def run_study_session(
             },
         )
 
+        # Update daily_progress aggregate
+        study_minutes = total_time // 60
+        await session.execute(
+            text("""
+                INSERT INTO daily_progress
+                    (user_id, date, questions_seen, questions_correct, study_minutes)
+                VALUES (:uid, DATE('now'), :seen, :correct, :minutes)
+                ON CONFLICT(user_id, date) DO UPDATE SET
+                    questions_seen = questions_seen + excluded.questions_seen,
+                    questions_correct = questions_correct + excluded.questions_correct,
+                    study_minutes = study_minutes + excluded.study_minutes
+            """),
+            {
+                "uid": user_id,
+                "seen": seen_count,
+                "correct": correct_count,
+                "minutes": study_minutes,
+            },
+        )
+
     # Final summary
     accuracy = correct_count / seen_count if seen_count > 0 else 0
     table = Table(title="Session Summary", show_header=False)

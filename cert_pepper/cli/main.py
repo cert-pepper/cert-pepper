@@ -14,6 +14,9 @@ app = typer.Typer(
 db_app = typer.Typer(help="Database management commands.")
 app.add_typer(db_app, name="db")
 
+goal_app = typer.Typer(help="Set and view your exam study goal.")
+app.add_typer(goal_app, name="goal")
+
 
 @db_app.command("init")
 def db_init(
@@ -193,6 +196,36 @@ def upgrade(
         console.print(table)
 
     console.print("[bold green]✓ Upgrade complete. Study progress preserved.[/bold green]")
+
+
+@goal_app.command("set")
+def goal_set(
+    exam_date: str = typer.Option(..., "--exam-date", help="Exam date (YYYY-MM-DD)."),
+    hours: int = typer.Option(40, "--hours", help="Target study hours."),
+    exam: str | None = typer.Option(
+        None, "--exam", "-e", help="Exam code. Auto-detects when only one exam is present."
+    ),
+) -> None:
+    """Set your exam date and study hour target."""
+    import asyncio
+
+    from cert_pepper.cli.goal import _goal_set
+
+    asyncio.run(_goal_set(exam_date, hours, exam))
+
+
+@goal_app.command("show")
+def goal_show(
+    exam: str | None = typer.Option(
+        None, "--exam", "-e", help="Exam code. Auto-detects when only one exam is present."
+    ),
+) -> None:
+    """Show schedule pace summary and study calendar."""
+    import asyncio
+
+    from cert_pepper.cli.goal import _goal_show
+
+    asyncio.run(_goal_show(exam))
 
 
 @app.command("pregenerate")

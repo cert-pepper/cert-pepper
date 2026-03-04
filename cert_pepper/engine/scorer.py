@@ -8,6 +8,7 @@ Pass probability uses logistic function centered on 750.
 from __future__ import annotations
 
 import math
+from dataclasses import dataclass
 from datetime import date, timedelta
 
 from sqlalchemy import text
@@ -18,6 +19,120 @@ from cert_pepper.models.analytics import (
     StudyRecommendation,
     WeakArea,
 )
+
+
+@dataclass
+class ScheduleStatus:
+    exam_date: date
+    target_hours: int
+    hours_completed: float
+    hours_remaining: float
+    days_remaining: int
+    sessions_per_day: int
+    sessions_today: int
+    on_pace: bool
+    pct_complete: float
+
+
+@dataclass
+class DayStatus:
+    date: date
+    sessions_target: int
+    sessions_actual: int
+    status: str  # "met" | "partial" | "missed" | "future" | "today"
+
+
+_SESSION_MINUTES = 45  # assumed session length for scheduling math
+
+
+def compute_schedule_status(
+    exam_date: date,
+    target_hours: int,
+    hours_completed: float,
+    sessions_today: int,
+    start_date: date | None = None,
+) -> ScheduleStatus:
+    """Compute schedule adherence toward an exam date.
+
+    Args:
+        exam_date: Target exam date.
+        target_hours: Total planned study hours.
+        hours_completed: Hours studied so far (from study_sessions).
+        sessions_today: Sessions already completed today.
+        start_date: When goal tracking began (for on_pace calculation).
+                    Defaults to 14 days before exam_date if None.
+    """
+    today = date.today()
+    if start_date is None:
+        start_date = exam_date - timedelta(days=14)
+
+    days_remaining = max(0, (exam_date - today).days)
+    hours_remaining = max(0.0, target_hours - hours_completed)
+    pct_complete = min(1.0, hours_completed / target_hours) if target_hours > 0 else 0.0
+
+    # sessions/day: how many 45-min sessions to finish remaining hours
+    hours_per_day = hours_remaining / max(days_remaining, 1)
+    raw_sessions = math.ceil(hours_per_day * 60 / _SESSION_MINUTES)
+    sessions_per_day = max(1, min(3, raw_sessions))
+
+    # on_pace: current required daily rate ≤ original planned daily rate
+    total_days = max(1, (exam_date - start_date).days)
+    planned_daily = target_hours / total_days
+    required_daily = hours_remaining / max(days_remaining, 1)
+    on_pace = required_daily <= planned_daily
+
+    return ScheduleStatus(
+        exam_date=exam_date,
+        target_hours=target_hours,
+        hours_completed=hours_completed,
+        hours_remaining=hours_remaining,
+        days_remaining=days_remaining,
+        sessions_per_day=sessions_per_day,
+        sessions_today=sessions_today,
+        on_pace=on_pace,
+        pct_complete=pct_complete,
+    )
+
+
+def get_day_statuses(
+    daily_sessions: dict[date, int],
+    exam_date: date,
+    sessions_per_day: int,
+    start_date: date,
+) -> list[DayStatus]:
+    """Return a DayStatus for every day from start_date to exam_date (inclusive).
+
+    Args:
+        daily_sessions: Map of {date: sessions_completed} from DB.
+        exam_date: Target exam date (included in the output list).
+        sessions_per_day: Recommended daily target.
+        start_date: First day to include.
+    """
+    today = date.today()
+    statuses: list[DayStatus] = []
+    current = start_date
+    while current <= exam_date:
+        actual = daily_sessions.get(current, 0)
+        if current > today:
+            status = "future"
+        elif current == today:
+            status = "today"
+        elif actual >= sessions_per_day:
+            status = "met"
+        elif actual > 0:
+            status = "partial"
+        else:
+            status = "missed"
+        statuses.append(
+            DayStatus(
+                date=current,
+                sessions_target=sessions_per_day,
+                sessions_actual=actual,
+                status=status,
+            )
+        )
+        current += timedelta(days=1)
+    return statuses
 
 
 def compute_streak(dates: list[date]) -> int:

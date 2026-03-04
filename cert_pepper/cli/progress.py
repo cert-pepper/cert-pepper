@@ -130,6 +130,50 @@ async def show_dashboard(exam_code: str | None = None) -> None:
         )
     )
 
+    # Schedule section (shown only when a goal is set)
+    async with get_session() as session:
+        from cert_pepper.db.goals import get_goal, get_hours_completed, get_sessions_today
+        from cert_pepper.engine.scorer import compute_schedule_status
+
+        goal = await get_goal(session, user_id, cert_id)
+        if goal is not None:
+            hours_completed = await get_hours_completed(session, user_id, cert_id)
+            sessions_today_count = await get_sessions_today(session, user_id, cert_id)
+
+            created_raw = goal.get("created_at")
+            start_date = None
+            if created_raw:
+                try:
+                    from datetime import date as date_cls
+                    start_date = date_cls.fromisoformat(str(created_raw)[:10])
+                except ValueError:
+                    pass
+
+            sched = compute_schedule_status(
+                exam_date=goal["exam_date"],
+                target_hours=goal["target_hours"],
+                hours_completed=hours_completed,
+                sessions_today=sessions_today_count,
+                start_date=start_date,
+            )
+            pct_int = int(sched.pct_complete * 100)
+            bar_filled = int(sched.pct_complete * 20)
+            bar = "█" * bar_filled + "░" * (20 - bar_filled)
+            pace_color = "green" if sched.on_pace else "yellow"
+            console.print(
+                f"[dim]Schedule:[/dim] Exam in [cyan]{sched.days_remaining}[/cyan] day(s) · "
+                f"[cyan]{hours_completed:.1f}h[/cyan] / [cyan]{sched.target_hours}h[/cyan] · "
+                f"[{pace_color}]{bar}[/{pace_color}] {pct_int}% · "
+                f"[{pace_color}]{sched.sessions_per_day} session(s)/day recommended[/{pace_color}]"
+            )
+            console.print()
+        else:
+            console.print(
+                "[dim]Tip: Run [bold]cert-pepper goal set --exam-date YYYY-MM-DD[/bold] "
+                "to enable schedule tracking.[/dim]"
+            )
+            console.print()
+
     # Overall stats
     overall_acc = total_correct / total_attempts if total_attempts > 0 else 0
     score_color = (

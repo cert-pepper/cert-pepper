@@ -222,6 +222,21 @@ CREATE TABLE IF NOT EXISTS predicted_scores (
 );
 
 -- ============================================================
+-- GOALS
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS user_goals (
+    id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id             INTEGER NOT NULL REFERENCES users(id),
+    certification_id    INTEGER NOT NULL REFERENCES certifications(id),
+    exam_date           DATE NOT NULL,          -- YYYY-MM-DD
+    target_hours        INTEGER NOT NULL DEFAULT 40,
+    created_at          DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at          DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(user_id, certification_id)
+);
+
+-- ============================================================
 -- INDEXES
 -- ============================================================
 

@@ -85,7 +85,10 @@ async def get_study_recommendations(
     exam_code: str | None = None,
 ) -> str:
     """Get prioritized study recommendations based on weak areas and days remaining."""
+    from datetime import date
+
     from cert_pepper.db.exams import resolve_cert_id
+    from cert_pepper.db.goals import get_goal
     from cert_pepper.engine.scorer import get_recommendations
 
     async with get_session() as db:
@@ -94,6 +97,12 @@ async def get_study_recommendations(
             cert_id = await resolve_cert_id(db, exam_code)
         except ValueError as e:
             return json.dumps({"error": str(e)})
+
+        # Auto-populate days_remaining from user_goals if set
+        goal = await get_goal(db, user_id, cert_id)
+        if goal is not None:
+            days_remaining = max(0, (goal["exam_date"] - date.today()).days)
+
         recs = await get_recommendations(
             db, user_id, days_remaining=days_remaining, cert_id=cert_id
         )
@@ -110,6 +119,85 @@ async def get_study_recommendations(
             }
             for r in recs
         ],
+    })
+
+
+@mcp.tool()
+async def get_schedule_status(exam_code: str | None = None) -> str:
+    """Return current schedule adherence and pace toward exam date.
+
+    Returns JSON with: exam_date, days_remaining, target_hours, hours_completed,
+    pct_complete, sessions_per_day, on_pace, missed_days_count.
+    Requires a goal to be set via `cert-pepper goal set`.
+    """
+    from datetime import date
+
+    from cert_pepper.db.exams import resolve_cert_id
+    from cert_pepper.db.goals import (
+        get_daily_session_counts,
+        get_goal,
+        get_hours_completed,
+        get_sessions_today,
+    )
+    from cert_pepper.engine.scorer import compute_schedule_status, get_day_statuses
+
+    async with get_session() as db:
+        user_id = await _get_user_id(db)
+        try:
+            cert_id = await resolve_cert_id(db, exam_code)
+        except ValueError as e:
+            return json.dumps({"error": str(e)})
+
+        goal = await get_goal(db, user_id, cert_id)
+        if goal is None:
+            return json.dumps({
+                "error": "No goal set. Run: cert-pepper goal set --exam-date YYYY-MM-DD"
+            })
+
+        hours_completed = await get_hours_completed(db, user_id, cert_id)
+        sessions_today = await get_sessions_today(db, user_id, cert_id)
+        daily_counts = await get_daily_session_counts(db, user_id, cert_id)
+
+    exam_date = goal["exam_date"]
+    target_hours = goal["target_hours"]
+
+    created_raw = goal.get("created_at")
+    start_date = None
+    if created_raw:
+        try:
+            start_date = date.fromisoformat(str(created_raw)[:10])
+        except ValueError:
+            pass
+
+    status = compute_schedule_status(
+        exam_date=exam_date,
+        target_hours=target_hours,
+        hours_completed=hours_completed,
+        sessions_today=sessions_today,
+        start_date=start_date,
+    )
+
+    # Count missed days
+    from datetime import timedelta
+    calendar_start = date.today() - timedelta(weeks=4)
+    day_statuses = get_day_statuses(
+        daily_sessions=daily_counts,
+        exam_date=exam_date,
+        sessions_per_day=status.sessions_per_day,
+        start_date=calendar_start,
+    )
+    missed_days = sum(1 for ds in day_statuses if ds.status == "missed")
+
+    return json.dumps({
+        "exam_date": exam_date.isoformat(),
+        "days_remaining": status.days_remaining,
+        "target_hours": target_hours,
+        "hours_completed": round(hours_completed, 2),
+        "pct_complete": f"{status.pct_complete:.0%}",
+        "sessions_per_day": status.sessions_per_day,
+        "sessions_today": sessions_today,
+        "on_pace": status.on_pace,
+        "missed_days_count": missed_days,
     })
 
 

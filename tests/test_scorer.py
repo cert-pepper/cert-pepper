@@ -18,6 +18,8 @@ from datetime import date, timedelta
 
 from cert_pepper.engine.scorer import (
     compute_streak,
+    compute_schedule_status,
+    get_day_statuses,
     get_domain_accuracies,
     predict_score,
     get_weak_areas,
@@ -392,3 +394,225 @@ class TestMultiCertScoring:
         # Cert A has 5 domains; none of them is cert B's domain
         assert all(w.domain_number in {1, 2, 3, 4, 5} for w in weak)
         assert len(weak) == 5
+
+
+# ---------------------------------------------------------------------------
+# compute_schedule_status (pure function)
+# ---------------------------------------------------------------------------
+
+class TestScheduleStatus:
+    def _exam(self, days_from_now: int = 6) -> date:
+        return date.today() + timedelta(days=days_from_now)
+
+    def _start(self, days_ago: int = 4) -> date:
+        return date.today() - timedelta(days=days_ago)
+
+    def test_basic_fields_computed(self):
+        status = compute_schedule_status(
+            exam_date=self._exam(6),
+            target_hours=40,
+            hours_completed=12.0,
+            sessions_today=1,
+            start_date=self._start(4),
+        )
+        assert status.exam_date == self._exam(6)
+        assert status.target_hours == 40
+        assert status.hours_completed == pytest.approx(12.0)
+        assert status.hours_remaining == pytest.approx(28.0)
+        assert status.days_remaining == 6
+        assert status.sessions_today == 1
+        assert 0.0 <= status.pct_complete <= 1.0
+
+    def test_pct_complete_calculation(self):
+        status = compute_schedule_status(
+            exam_date=self._exam(10),
+            target_hours=40,
+            hours_completed=10.0,
+            sessions_today=0,
+            start_date=self._start(0),
+        )
+        assert status.pct_complete == pytest.approx(0.25)
+
+    def test_sessions_per_day_typical(self):
+        # 28h remaining, 6 days → 4.67h/day → ceil(4.67*60/45)=ceil(6.22)=7 → capped at 3
+        status = compute_schedule_status(
+            exam_date=self._exam(6),
+            target_hours=40,
+            hours_completed=12.0,
+            sessions_today=0,
+            start_date=self._start(4),
+        )
+        assert status.sessions_per_day == 3
+
+    def test_sessions_per_day_minimum_one(self):
+        # hours_remaining = 0 → sessions_per_day = 1 (minimum)
+        status = compute_schedule_status(
+            exam_date=self._exam(10),
+            target_hours=40,
+            hours_completed=40.0,
+            sessions_today=0,
+            start_date=self._start(4),
+        )
+        assert status.sessions_per_day == 1
+
+    def test_sessions_per_day_capped_at_three(self):
+        # Extreme: 39h remaining, 1 day → way over cap
+        status = compute_schedule_status(
+            exam_date=self._exam(1),
+            target_hours=40,
+            hours_completed=1.0,
+            sessions_today=0,
+            start_date=self._start(4),
+        )
+        assert status.sessions_per_day == 3
+
+    def test_sessions_per_day_two(self):
+        # 1.5h/day → ceil(1.5*60/45) = ceil(2.0) = 2
+        status = compute_schedule_status(
+            exam_date=self._exam(4),
+            target_hours=10,
+            hours_completed=4.0,
+            sessions_today=0,
+            start_date=self._start(4),
+        )
+        # 6h remaining / 4 days = 1.5h/day → 2 sessions
+        assert status.sessions_per_day == 2
+
+    def test_on_pace_when_ahead(self):
+        # total_days=10, target=40h → planned=4h/day
+        # hours_remaining=20, days_remaining=6 → required=3.33h/day ≤ 4 → on_pace=True
+        status = compute_schedule_status(
+            exam_date=self._exam(6),
+            target_hours=40,
+            hours_completed=20.0,
+            sessions_today=0,
+            start_date=self._start(4),
+        )
+        assert status.on_pace is True
+
+    def test_not_on_pace_when_behind(self):
+        # total_days=10, target=40h → planned=4h/day
+        # hours_remaining=38, days_remaining=6 → required=6.33h/day > 4 → on_pace=False
+        status = compute_schedule_status(
+            exam_date=self._exam(6),
+            target_hours=40,
+            hours_completed=2.0,
+            sessions_today=0,
+            start_date=self._start(4),
+        )
+        assert status.on_pace is False
+
+    def test_zero_days_remaining_no_crash(self):
+        status = compute_schedule_status(
+            exam_date=date.today(),
+            target_hours=40,
+            hours_completed=30.0,
+            sessions_today=2,
+            start_date=self._start(10),
+        )
+        assert status.days_remaining == 0
+        assert status.sessions_per_day >= 1
+
+
+# ---------------------------------------------------------------------------
+# get_day_statuses (pure function)
+# ---------------------------------------------------------------------------
+
+class TestGetDayStatuses:
+    def test_all_future_when_no_sessions(self):
+        today = date.today()
+        start = today + timedelta(days=1)
+        exam = today + timedelta(days=7)
+        statuses = get_day_statuses(
+            daily_sessions={},
+            exam_date=exam,
+            sessions_per_day=2,
+            start_date=start,
+        )
+        assert all(s.status == "future" for s in statuses)
+
+    def test_met_day_when_sessions_at_or_above_target(self):
+        today = date.today()
+        past_day = today - timedelta(days=1)
+        statuses = get_day_statuses(
+            daily_sessions={past_day: 2},
+            exam_date=today + timedelta(days=5),
+            sessions_per_day=2,
+            start_date=past_day,
+        )
+        day = next(s for s in statuses if s.date == past_day)
+        assert day.status == "met"
+        assert day.sessions_actual == 2
+
+    def test_partial_day_when_some_but_below_target(self):
+        today = date.today()
+        past_day = today - timedelta(days=2)
+        statuses = get_day_statuses(
+            daily_sessions={past_day: 1},
+            exam_date=today + timedelta(days=5),
+            sessions_per_day=2,
+            start_date=past_day,
+        )
+        day = next(s for s in statuses if s.date == past_day)
+        assert day.status == "partial"
+
+    def test_missed_day_when_zero_sessions_in_past(self):
+        today = date.today()
+        past_day = today - timedelta(days=3)
+        statuses = get_day_statuses(
+            daily_sessions={},
+            exam_date=today + timedelta(days=5),
+            sessions_per_day=2,
+            start_date=past_day,
+        )
+        day = next(s for s in statuses if s.date == past_day)
+        assert day.status == "missed"
+        assert day.sessions_actual == 0
+
+    def test_today_status(self):
+        today = date.today()
+        past = today - timedelta(days=1)
+        statuses = get_day_statuses(
+            daily_sessions={},
+            exam_date=today + timedelta(days=5),
+            sessions_per_day=2,
+            start_date=past,
+        )
+        today_status = next(s for s in statuses if s.date == today)
+        assert today_status.status == "today"
+
+    def test_future_status(self):
+        today = date.today()
+        future = today + timedelta(days=3)
+        statuses = get_day_statuses(
+            daily_sessions={},
+            exam_date=today + timedelta(days=7),
+            sessions_per_day=2,
+            start_date=today,
+        )
+        fut = next(s for s in statuses if s.date == future)
+        assert fut.status == "future"
+
+    def test_sessions_target_matches_sessions_per_day(self):
+        today = date.today()
+        start = today - timedelta(days=1)
+        statuses = get_day_statuses(
+            daily_sessions={},
+            exam_date=today + timedelta(days=3),
+            sessions_per_day=3,
+            start_date=start,
+        )
+        assert all(s.sessions_target == 3 for s in statuses)
+
+    def test_day_count_includes_exam_date(self):
+        today = date.today()
+        start = today
+        exam = today + timedelta(days=4)
+        statuses = get_day_statuses(
+            daily_sessions={},
+            exam_date=exam,
+            sessions_per_day=1,
+            start_date=start,
+        )
+        # should include start, start+1, ..., exam → 5 days
+        assert len(statuses) == 5
