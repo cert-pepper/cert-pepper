@@ -3,16 +3,23 @@
 from __future__ import annotations
 
 from datetime import date
+from typing import TypedDict
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
+
+
+class GoalRow(TypedDict):
+    exam_date: date
+    target_hours: int
+    created_at: str | None
 
 
 async def get_goal(
     session: AsyncSession,
     user_id: int,
     cert_id: int,
-) -> dict | None:
+) -> GoalRow | None:
     """Return the user's goal for a certification, or None if not set."""
     result = await session.execute(
         text("""

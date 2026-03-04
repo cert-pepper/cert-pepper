@@ -220,8 +220,8 @@ async def _goal_show(exam_code: str | None) -> None:
         # Week label: use the Monday of this week
         monday = date.fromisocalendar(yr, wk, 1)
         label = monday.strftime("%b %d")
-        row = [label] + [cells.get(d, " ") for d in range(1, 8)]
-        cal_table.add_row(*row)
+        cal_row = [label] + [cells.get(d, " ") for d in range(1, 8)]
+        cal_table.add_row(*cal_row)
 
     console.print(cal_table)
     console.print(
