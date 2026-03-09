@@ -65,6 +65,7 @@ async def start_session(
     session_type: str = "study",
     domain_filter: int | None = None,
     exam_code: str | None = None,
+    new_only: bool = False,
 ) -> str:
     """Start a new study session. Returns session_id."""
     from sqlalchemy import text
@@ -103,6 +104,7 @@ async def start_session(
         "type": session_type,
         "domain_filter": domain_filter,
         "cert_id": cert_id,
+        "new_only": new_only,
         "questions_seen": 0,
         "questions_correct": 0,
         "started_at": datetime.utcnow().isoformat(),
@@ -123,11 +125,12 @@ async def get_next_question(session_id: str) -> str:
     sess = _sessions.get(session_id, {})
     domain_filter = sess.get("domain_filter")
     cert_id = sess.get("cert_id")
+    new_only = sess.get("new_only", False)
 
     async with get_session() as db:
         user_id = await _get_user_id(db)
         question_id = await selector.select_question(
-            db, user_id, domain_filter=domain_filter, cert_id=cert_id
+            db, user_id, domain_filter=domain_filter, cert_id=cert_id, new_only=new_only
         )
 
         if question_id is None:

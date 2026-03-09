@@ -392,6 +392,56 @@ class TestGetDomainAccuracy:
 
 
 # ---------------------------------------------------------------------------
+# new_only flag
+# ---------------------------------------------------------------------------
+
+class TestNewOnly:
+    async def test_new_only_skips_all_due_cards(self, db):
+        """new_only=True must skip Tier 1 (review) and Tier 2 (learning) entirely."""
+        now = datetime.utcnow()
+        async with get_session() as session:
+            user_id = await get_user_id(session)
+            unseen_id = await seed_question(session, domain_number=4, number=1)
+            review_id = await seed_question(session, domain_number=4, number=2)
+            learning_id = await seed_question(session, domain_number=4, number=3)
+            await register_fsrs_card(
+                session, user_id, review_id, state="review",
+                due_date=now - timedelta(days=2),
+            )
+            await register_fsrs_card(
+                session, user_id, learning_id, state="learning",
+                due_date=now - timedelta(minutes=5),
+            )
+            await session.commit()
+
+        async with get_session() as session:
+            user_id = await get_user_id(session)
+            result = await select_question(session, user_id, now=now, new_only=True)
+
+        assert result == unseen_id
+
+    async def test_new_only_falls_back_to_tier4_when_no_unseen(self, db):
+        """When new_only=True and no unseen questions exist, fall back to Tier 4."""
+        now = datetime.utcnow()
+        async with get_session() as session:
+            user_id = await get_user_id(session)
+            # Seed a question that has been seen (has an fsrs_card entry)
+            seen_id = await seed_question(session, domain_number=4, number=1)
+            await register_fsrs_card(
+                session, user_id, seen_id, state="review",
+                due_date=now + timedelta(days=5),  # not due
+            )
+            await session.commit()
+
+        async with get_session() as session:
+            user_id = await get_user_id(session)
+            result = await select_question(session, user_id, now=now, new_only=True)
+
+        # Tier 4 fallback returns the only question available
+        assert result == seen_id
+
+
+# ---------------------------------------------------------------------------
 # Accuracy-weighted selection
 # ---------------------------------------------------------------------------
 

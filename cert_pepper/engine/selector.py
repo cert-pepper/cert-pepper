@@ -52,6 +52,7 @@ async def select_question(
     domain_filter: int | None = None,
     cert_id: int | None = None,
     now: datetime | None = None,
+    new_only: bool = False,
 ) -> int | None:
     """
     Return a question_id to study next, or None if no questions available.
@@ -76,47 +77,48 @@ async def select_question(
         "domain_filter": domain_filter,
     }
 
-    # 1. Overdue review cards
-    result = await session.execute(
-        text("""
-            SELECT q.id
-            FROM questions q
-            JOIN domains d ON d.id = q.domain_id
-            JOIN fsrs_cards fc ON fc.content_type = 'question'
-                AND fc.content_id = q.id AND fc.user_id = :user_id
-            WHERE fc.state = 'review'
-            AND fc.due_date <= :now
-            AND d.certification_id = :cert_id
-            AND (:domain_filter IS NULL OR d.number = :domain_filter)
-            ORDER BY fc.due_date ASC
-            LIMIT 1
-        """),
-        params,
-    )
-    row = result.fetchone()
-    if row:
-        return int(row[0])
+    if not new_only:
+        # 1. Overdue review cards
+        result = await session.execute(
+            text("""
+                SELECT q.id
+                FROM questions q
+                JOIN domains d ON d.id = q.domain_id
+                JOIN fsrs_cards fc ON fc.content_type = 'question'
+                    AND fc.content_id = q.id AND fc.user_id = :user_id
+                WHERE fc.state = 'review'
+                AND fc.due_date <= :now
+                AND d.certification_id = :cert_id
+                AND (:domain_filter IS NULL OR d.number = :domain_filter)
+                ORDER BY fc.due_date ASC
+                LIMIT 1
+            """),
+            params,
+        )
+        row = result.fetchone()
+        if row:
+            return int(row[0])
 
-    # 2. Due learning/relearning cards
-    result = await session.execute(
-        text("""
-            SELECT q.id
-            FROM questions q
-            JOIN domains d ON d.id = q.domain_id
-            JOIN fsrs_cards fc ON fc.content_type = 'question'
-                AND fc.content_id = q.id AND fc.user_id = :user_id
-            WHERE fc.state IN ('learning', 'relearning')
-            AND fc.due_date <= :now
-            AND d.certification_id = :cert_id
-            AND (:domain_filter IS NULL OR d.number = :domain_filter)
-            ORDER BY fc.due_date ASC
-            LIMIT 1
-        """),
-        params,
-    )
-    row = result.fetchone()
-    if row:
-        return int(row[0])
+        # 2. Due learning/relearning cards
+        result = await session.execute(
+            text("""
+                SELECT q.id
+                FROM questions q
+                JOIN domains d ON d.id = q.domain_id
+                JOIN fsrs_cards fc ON fc.content_type = 'question'
+                    AND fc.content_id = q.id AND fc.user_id = :user_id
+                WHERE fc.state IN ('learning', 'relearning')
+                AND fc.due_date <= :now
+                AND d.certification_id = :cert_id
+                AND (:domain_filter IS NULL OR d.number = :domain_filter)
+                ORDER BY fc.due_date ASC
+                LIMIT 1
+            """),
+            params,
+        )
+        row = result.fetchone()
+        if row:
+            return int(row[0])
 
     # 3. Unseen questions — one random candidate per domain, then weighted selection
     result = await session.execute(

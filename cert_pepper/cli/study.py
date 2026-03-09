@@ -242,6 +242,7 @@ async def run_study_session(
     count: int = 10,
     use_ai: bool = True,
     exam_code: str | None = None,
+    new_only: bool = False,
 ) -> None:
     """Run an interactive study session."""
     console.print(
@@ -285,7 +286,7 @@ async def run_study_session(
         for i in range(count):
             # Select next question
             question_id = await selector.select_question(
-                session, user_id, domain_filter=domain, cert_id=cert_id
+                session, user_id, domain_filter=domain, cert_id=cert_id, new_only=new_only
             )
             if question_id is None:
                 console.print("[yellow]No more questions available![/yellow]")

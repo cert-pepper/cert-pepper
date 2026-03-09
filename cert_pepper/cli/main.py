@@ -102,12 +102,13 @@ def study(
         None, "--exam", "-e",
         help="Exam code (e.g. SY0-701). Auto-detects when only one exam is present."
     ),
+    new_questions: bool = typer.Option(False, "--new-questions", help="Study only unseen questions."),
 ) -> None:
     """Start an adaptive study session."""
     import asyncio
 
     from cert_pepper.cli.study import run_study_session
-    asyncio.run(run_study_session(domain=domain, count=count, use_ai=not no_ai, exam_code=exam))
+    asyncio.run(run_study_session(domain=domain, count=count, use_ai=not no_ai, exam_code=exam, new_only=new_questions))
 
 
 @app.command("quiz")
