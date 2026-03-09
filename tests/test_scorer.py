@@ -21,6 +21,7 @@ from cert_pepper.engine.scorer import (
     compute_schedule_status,
     get_day_statuses,
     get_domain_accuracies,
+    get_question_counts,
     predict_score,
     get_weak_areas,
     get_recommendations,
@@ -330,6 +331,104 @@ class TestGetRecommendations:
 
 
 # ---------------------------------------------------------------------------
+# get_question_counts
+# ---------------------------------------------------------------------------
+
+class TestGetQuestionCounts:
+    async def test_no_questions_all_zeros(self, db):
+        async with get_session() as session:
+            user_id = await get_user_id(session)
+            counts = await get_question_counts(session, user_id)
+        assert counts.new == 0
+        assert counts.correct == 0
+        assert counts.incorrect == 0
+        assert counts.total == 0
+
+    async def test_unattempted_question_is_new(self, db):
+        async with get_session() as session:
+            user_id = await get_user_id(session)
+            await seed_question(session, domain_number=1, number=1)
+            await session.commit()
+
+        async with get_session() as session:
+            user_id = await get_user_id(session)
+            counts = await get_question_counts(session, user_id)
+        assert counts.new == 1
+        assert counts.correct == 0
+        assert counts.incorrect == 0
+        assert counts.total == 1
+
+    async def test_correctly_answered_counted_as_correct(self, db):
+        async with get_session() as session:
+            user_id = await get_user_id(session)
+            session_id = await seed_session(session, user_id)
+            q = await seed_question(session, domain_number=1, number=1)
+            await seed_attempt(session, user_id, q, session_id, is_correct=True)
+            await session.commit()
+
+        async with get_session() as session:
+            user_id = await get_user_id(session)
+            counts = await get_question_counts(session, user_id)
+        assert counts.correct == 1
+        assert counts.new == 0
+        assert counts.incorrect == 0
+
+    async def test_only_wrong_attempts_counted_as_incorrect(self, db):
+        async with get_session() as session:
+            user_id = await get_user_id(session)
+            session_id = await seed_session(session, user_id)
+            q = await seed_question(session, domain_number=1, number=1)
+            await seed_attempt(session, user_id, q, session_id, is_correct=False)
+            await session.commit()
+
+        async with get_session() as session:
+            user_id = await get_user_id(session)
+            counts = await get_question_counts(session, user_id)
+        assert counts.incorrect == 1
+        assert counts.new == 0
+        assert counts.correct == 0
+
+    async def test_correct_after_wrong_is_correct_not_incorrect(self, db):
+        async with get_session() as session:
+            user_id = await get_user_id(session)
+            session_id = await seed_session(session, user_id)
+            q = await seed_question(session, domain_number=1, number=1)
+            await seed_attempt(session, user_id, q, session_id, is_correct=False)
+            await seed_attempt(session, user_id, q, session_id, is_correct=True)
+            await session.commit()
+
+        async with get_session() as session:
+            user_id = await get_user_id(session)
+            counts = await get_question_counts(session, user_id)
+        assert counts.correct == 1
+        assert counts.incorrect == 0
+        assert counts.new == 0
+
+    async def test_buckets_sum_to_total(self, db):
+        async with get_session() as session:
+            user_id = await get_user_id(session)
+            session_id = await seed_session(session, user_id)
+            # q1: new (no attempt)
+            await seed_question(session, domain_number=1, number=1)
+            # q2: correct
+            q2 = await seed_question(session, domain_number=1, number=2)
+            await seed_attempt(session, user_id, q2, session_id, is_correct=True)
+            # q3: incorrect only
+            q3 = await seed_question(session, domain_number=1, number=3)
+            await seed_attempt(session, user_id, q3, session_id, is_correct=False)
+            await session.commit()
+
+        async with get_session() as session:
+            user_id = await get_user_id(session)
+            counts = await get_question_counts(session, user_id)
+        assert counts.new == 1
+        assert counts.correct == 1
+        assert counts.incorrect == 1
+        assert counts.total == 3
+        assert counts.new + counts.correct + counts.incorrect == counts.total
+
+
+# ---------------------------------------------------------------------------
 # Multi-cert scoping
 # ---------------------------------------------------------------------------
 
@@ -616,3 +715,94 @@ class TestGetDayStatuses:
         )
         # should include start, start+1, ..., exam → 5 days
         assert len(statuses) == 5
+
+
+# ---------------------------------------------------------------------------
+# TestCoverageAdjustedScore
+# ---------------------------------------------------------------------------
+
+class TestCoverageAdjustedScore:
+    async def test_unseen_questions_pull_score_toward_midpoint(self, db):
+        """Extra unseen questions in domain 4 reduce effective accuracy below 1.0."""
+        async with get_session() as session:
+            user_id = await get_user_id(session)
+            session_id = await seed_session(session, user_id)
+            # Seed 1 question per domain, answer all correctly
+            for domain in range(1, 6):
+                q = await seed_question(session, domain_number=domain, number=1)
+                await seed_attempt(session, user_id, q, session_id, is_correct=True)
+            # Seed 4 more unanswered questions in domain 4
+            for i in range(2, 6):
+                await seed_question(session, domain_number=4, number=i)
+            await session.commit()
+
+        async with get_session() as session:
+            user_id = await get_user_id(session)
+            score = await predict_score(session, user_id)
+
+        # Domain 4: seen=1, total=5, raw=1.0 → effective=(1.0+0.5*4)/5=0.6
+        # Other domains: seen=total=1 → effective=1.0 → score must be < 900
+        assert score.predicted_score < 900
+
+    async def test_full_coverage_matches_raw_accuracy(self, db):
+        """When all questions are answered, coverage-adjusted accuracy == raw accuracy."""
+        async with get_session() as session:
+            user_id = await get_user_id(session)
+            session_id = await seed_session(session, user_id)
+            q1 = await seed_question(session, domain_number=2, number=1)
+            q2 = await seed_question(session, domain_number=2, number=2)
+            await seed_attempt(session, user_id, q1, session_id, is_correct=True)
+            await seed_attempt(session, user_id, q2, session_id, is_correct=False)
+            await session.commit()
+
+        async with get_session() as session:
+            user_id = await get_user_id(session)
+            score = await predict_score(session, user_id)
+
+        # 1 correct, 1 wrong, 2 total → effective = (0.5*2 + 0.5*0) / 2 = 0.5
+        # But seen == total → simplifies to raw = 0.5
+        assert score.domain_accuracies[2] == pytest.approx(0.5)
+
+    async def test_zero_coverage_gives_zero_score(self, db):
+        """No questions seeded → total=0 per domain → predicted_score=0 (edge case)."""
+        async with get_session() as session:
+            user_id = await get_user_id(session)
+            score = await predict_score(session, user_id)
+
+        assert score.predicted_score == 0
+        assert score.coverage_pct == pytest.approx(0.0)
+
+    async def test_coverage_pct_field_is_correct(self, db):
+        """coverage_pct = seen_distinct / total across all domains."""
+        async with get_session() as session:
+            user_id = await get_user_id(session)
+            session_id = await seed_session(session, user_id)
+            q1 = await seed_question(session, domain_number=1, number=1)
+            await seed_question(session, domain_number=1, number=2)  # unanswered
+            await seed_attempt(session, user_id, q1, session_id, is_correct=True)
+            await session.commit()
+
+        async with get_session() as session:
+            user_id = await get_user_id(session)
+            score = await predict_score(session, user_id)
+
+        # 1 seen, 2 total → coverage = 0.5
+        assert score.coverage_pct == pytest.approx(0.5)
+
+    async def test_partial_coverage_score_below_full_accuracy_score(self, db):
+        """Leaving questions unseen reduces predicted score even with 100% raw accuracy."""
+        async with get_session() as session:
+            user_id = await get_user_id(session)
+            session_id = await seed_session(session, user_id)
+            # Domain 1: 2 questions, answer only 1 correctly, leave 1 unseen
+            q1 = await seed_question(session, domain_number=1, number=1)
+            await seed_question(session, domain_number=1, number=2)  # unseen
+            await seed_attempt(session, user_id, q1, session_id, is_correct=True)
+            await session.commit()
+
+        async with get_session() as session:
+            user_id = await get_user_id(session)
+            score = await predict_score(session, user_id)
+
+        # effective_acc[1] = (1.0 * 1 + 0.5 * 1) / 2 = 0.75
+        assert score.domain_accuracies[1] == pytest.approx(0.75)

@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from cert_pepper.models.analytics import (
     PredictedScore,
+    QuestionCounts,
     StudyRecommendation,
     WeakArea,
 )
@@ -209,8 +210,38 @@ async def predict_score(
     )
     db_weights = {row[0]: row[1] / 100.0 for row in result.fetchall()}
 
-    accuracies = await get_domain_accuracies(session, user_id, cert_id=cert_id)
-    d_acc = {num: accuracies.get(num, (0.0, 0))[0] for num in db_weights}
+    # Per-domain: seen distinct questions and total question count
+    cov_result = await session.execute(
+        text("""
+            SELECT d.number,
+                   COUNT(DISTINCT qa.question_id) AS seen,
+                   COUNT(DISTINCT q.id)           AS total
+            FROM domains d
+            JOIN questions q ON q.domain_id = d.id
+            LEFT JOIN question_attempts qa
+                ON qa.question_id = q.id AND qa.user_id = :user_id
+            WHERE d.certification_id = :cert_id
+            GROUP BY d.number
+        """),
+        {"user_id": user_id, "cert_id": cert_id},
+    )
+    domain_coverage = {row[0]: (row[1], row[2]) for row in cov_result.fetchall()}
+
+    raw_accuracies = await get_domain_accuracies(session, user_id, cert_id=cert_id)
+
+    d_acc: dict[int, float] = {}
+    for num in db_weights:
+        seen, total = domain_coverage.get(num, (0, 0))
+        raw = raw_accuracies.get(num, (0.0, 0))[0]
+        if total > 0:
+            d_acc[num] = (raw * seen + 0.5 * (total - seen)) / total
+        else:
+            d_acc[num] = 0.0
+
+    # Overall coverage fraction
+    total_seen = sum(v[0] for v in domain_coverage.values())
+    total_qs = sum(v[1] for v in domain_coverage.values())
+    coverage_pct = total_seen / total_qs if total_qs > 0 else 0.0
 
     # Weighted accuracy
     weighted = sum(d_acc.get(i, 0.0) * db_weights[i] for i in db_weights)
@@ -225,6 +256,7 @@ async def predict_score(
         domain_weights=db_weights,
         predicted_score=predicted,
         pass_probability=pass_prob,
+        coverage_pct=coverage_pct,
     )
 
 
@@ -337,3 +369,53 @@ async def get_recommendations(
         )
 
     return recommendations
+
+
+async def get_question_counts(
+    session: AsyncSession,
+    user_id: int,
+    cert_id: int | None = None,
+) -> QuestionCounts:
+    """Return counts of new, correctly answered, and incorrectly answered questions."""
+    if cert_id is None:
+        from cert_pepper.db.exams import resolve_cert_id
+        cert_id = await resolve_cert_id(session)
+
+    params = {"user_id": user_id, "cert_id": cert_id}
+
+    total = int((await session.execute(text("""
+        SELECT COUNT(*) FROM questions q
+        JOIN domains d ON d.id = q.domain_id
+        WHERE d.certification_id = :cert_id
+    """), {"cert_id": cert_id})).scalar() or 0)
+
+    new = int((await session.execute(text("""
+        SELECT COUNT(*) FROM questions q
+        JOIN domains d ON d.id = q.domain_id
+        LEFT JOIN question_attempts qa
+            ON qa.question_id = q.id AND qa.user_id = :user_id
+        WHERE d.certification_id = :cert_id AND qa.id IS NULL
+    """), params)).scalar() or 0)
+
+    correct = int((await session.execute(text("""
+        SELECT COUNT(DISTINCT qa.question_id)
+        FROM question_attempts qa
+        JOIN questions q ON q.id = qa.question_id
+        JOIN domains d ON d.id = q.domain_id
+        WHERE qa.user_id = :user_id AND d.certification_id = :cert_id
+        AND qa.is_correct = 1
+    """), params)).scalar() or 0)
+
+    incorrect = int((await session.execute(text("""
+        SELECT COUNT(DISTINCT qa.question_id)
+        FROM question_attempts qa
+        JOIN questions q ON q.id = qa.question_id
+        JOIN domains d ON d.id = q.domain_id
+        WHERE qa.user_id = :user_id AND d.certification_id = :cert_id
+        AND qa.question_id NOT IN (
+            SELECT DISTINCT question_id FROM question_attempts
+            WHERE user_id = :user_id AND is_correct = 1
+        )
+    """), params)).scalar() or 0)
+
+    return QuestionCounts(new=new, correct=correct, incorrect=incorrect, total=total)

@@ -39,11 +39,25 @@ async def predict_score(exam_code: str | None = None) -> str:
         for d, acc in sorted(score.domain_accuracies.items())
     }
 
+    coverage_warning = None
+    if score.coverage_pct < 0.30:
+        coverage_warning = (
+            f"Only {score.coverage_pct:.0%} of questions seen — score is unreliable."
+        )
+    elif score.coverage_pct < 0.50:
+        coverage_warning = (
+            f"Only {score.coverage_pct:.0%} seen — exam readiness cannot be confirmed."
+        )
+
     return json.dumps({
         "predicted_score": score.predicted_score,
         "pass_probability": f"{score.pass_probability:.0%}",
         "passing_score": 750,
-        "status": "PASS" if score.predicted_score >= 750 else "FAIL",
+        "status": "PASS" if (
+            score.predicted_score >= 750 and score.coverage_pct >= 0.50
+        ) else "FAIL",
+        "coverage_pct": f"{score.coverage_pct:.0%}",
+        "coverage_warning": coverage_warning,
         "domain_accuracies": domain_acc,
         "weighted_accuracy": f"{score.weighted_accuracy:.0%}",
     })
@@ -257,12 +271,38 @@ async def get_performance_trend(days: int = 7, exam_code: str | None = None) -> 
     return json.dumps({"days": days, "trend": trend})
 
 
+@mcp.tool()
+async def get_question_counts(exam_code: str | None = None) -> str:
+    """Return counts of new, correctly answered, and incorrectly answered questions."""
+    from cert_pepper.db.exams import resolve_cert_id
+    from cert_pepper.engine.scorer import get_question_counts as _get_counts
+
+    async with get_session() as db:
+        user_id = await _get_user_id(db)
+        try:
+            cert_id = await resolve_cert_id(db, exam_code)
+        except ValueError as e:
+            return json.dumps({"error": str(e)})
+        counts = await _get_counts(db, user_id, cert_id=cert_id)
+
+    seen = counts.correct + counts.incorrect
+    return json.dumps({
+        "total": counts.total,
+        "new": counts.new,
+        "correct": counts.correct,
+        "incorrect": counts.incorrect,
+        "pct_seen": f"{seen / counts.total:.0%}" if counts.total > 0 else "0%",
+        "pct_correct_of_seen": f"{counts.correct / seen:.0%}" if seen > 0 else "0%",
+    })
+
+
 @mcp.resource("analytics://dashboard")
 async def progress_dashboard() -> str:
     """Full progress report in Markdown."""
     from sqlalchemy import text
 
     from cert_pepper.db.exams import resolve_cert_id
+    from cert_pepper.engine.scorer import get_question_counts as _get_counts
     from cert_pepper.engine.scorer import get_weak_areas, predict_score
 
     async with get_session() as db:
@@ -274,6 +314,7 @@ async def progress_dashboard() -> str:
 
         score = await predict_score(db, user_id, cert_id=cert_id)
         weak = await get_weak_areas(db, user_id, cert_id=cert_id)
+        counts = await _get_counts(db, user_id, cert_id=cert_id)
 
         result = await db.execute(
             text("SELECT COUNT(*), SUM(is_correct) FROM question_attempts WHERE user_id=:uid"),
@@ -305,6 +346,15 @@ async def progress_dashboard() -> str:
         for num, name, weight in domains
     )
 
+    seen_distinct = counts.correct + counts.incorrect
+    coverage_note = (
+        f"⚠️ Only {score.coverage_pct:.0%} seen — score is unreliable."
+        if score.coverage_pct < 0.30
+        else f"⚠️ Only {score.coverage_pct:.0%} seen — readiness unconfirmed."
+        if score.coverage_pct < 0.50
+        else f"{score.coverage_pct:.0%} seen — sufficient for score estimate."
+    )
+
     report = f"""# cert-pepper Progress Dashboard
 
 ## Overview
@@ -312,6 +362,11 @@ async def progress_dashboard() -> str:
 - **Overall Accuracy**: {acc:.0%}
 - **Predicted Score**: {score.predicted_score}/900 ({status})
 - **Pass Probability**: {score.pass_probability:.0%}
+
+## Score Confidence
+- **Coverage**: {seen_distinct}/{counts.total} questions seen ({score.coverage_pct:.0%})
+- **Note**: {coverage_note}
+- Predicted score blends observed accuracy with a 50% prior for unseen questions.
 
 ## Domain Accuracies
 | Domain | Accuracy | Weight |
@@ -323,6 +378,12 @@ async def progress_dashboard() -> str:
     f"- Domain {w.domain_number}: {w.domain_name} — {w.accuracy_pct:.0%} ({w.attempts} attempts)"
     for w in weak
 ) or "None — all domains above threshold!"}
+
+## Question Coverage
+- **Total**: {counts.total:,}
+- **New** (never seen): {counts.new:,}
+- **Correct** (≥1 right): {counts.correct:,}
+- **Incorrect** (never right): {counts.incorrect:,}
 """
     return report
 

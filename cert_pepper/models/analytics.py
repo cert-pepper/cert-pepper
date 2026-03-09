@@ -17,6 +17,7 @@ class PredictedScore(BaseModel):
     domain_weights: dict[int, float] = {}
     predicted_score: int = 0
     pass_probability: float = 0.0
+    coverage_pct: float = 0.0  # fraction of question bank seen (0.0–1.0)
 
     # Backward-compat shim properties (used by existing MCP / CLI code)
     @property
@@ -64,3 +65,10 @@ class StudyReport(BaseModel):
     recommendations: list[StudyRecommendation]
     cards_due_today: int
     streak_days: int
+
+
+class QuestionCounts(BaseModel):
+    new: int        # never attempted
+    correct: int    # at least one correct attempt
+    incorrect: int  # attempted, never correct
+    total: int      # all questions for this cert

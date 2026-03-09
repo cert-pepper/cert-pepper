@@ -12,6 +12,7 @@ from sqlalchemy import text
 from cert_pepper.db.connection import get_session
 from cert_pepper.engine.scorer import (
     compute_streak,
+    get_question_counts,
     get_recommendations,
     get_weak_areas,
     predict_score,
@@ -91,8 +92,9 @@ async def show_dashboard(exam_code: str | None = None) -> None:
         )
         domain_stats = {row[0]: (row[1], row[2]) for row in result.fetchall()}
 
-        # Get predicted score
+        # Get predicted score and question coverage
         score = await predict_score(session, user_id, cert_id=cert_id)
+        counts = await get_question_counts(session, user_id, cert_id=cert_id)
         await get_weak_areas(session, user_id, cert_id=cert_id)
         recommendations = await get_recommendations(session, user_id, cert_id=cert_id)
 
@@ -185,7 +187,22 @@ async def show_dashboard(exam_code: str | None = None) -> None:
     stats_table = Table(show_header=False, box=None, padding=(0, 2))
     stats_table.add_column("", style="dim")
     stats_table.add_column("")
-    stats_table.add_row("Total Questions", f"{total_attempts:,}")
+    stats_table.add_row("Total Questions", f"{counts.total:,}")
+    stats_table.add_row("  New (never seen)", f"[dim]{counts.new:,}[/dim]")
+    stats_table.add_row("  Correct (≥1 right)", f"[green]{counts.correct:,}[/green]")
+    stats_table.add_row(
+        "  Incorrect (never right)",
+        f"[red]{counts.incorrect:,}[/red]" if counts.incorrect > 0 else "0",
+    )
+    cov_color = (
+        "green" if score.coverage_pct >= 0.5
+        else "yellow" if score.coverage_pct >= 0.3
+        else "red"
+    )
+    stats_table.add_row(
+        "  Coverage",
+        f"[{cov_color}]{score.coverage_pct:.0%} seen[/{cov_color}]",
+    )
     stats_table.add_row("Overall Accuracy", f"{overall_acc:.1%}")
     stats_table.add_row(
         "Predicted Score",
@@ -270,7 +287,14 @@ async def show_dashboard(exam_code: str | None = None) -> None:
 
     # Exam readiness
     console.print()
-    if score.predicted_score >= 750:
+    MIN_COVERAGE = 0.50
+    if score.coverage_pct < MIN_COVERAGE:
+        console.print(
+            f"[bold yellow]Exam Readiness: TOO EARLY TO TELL[/bold yellow] — "
+            f"Only {score.coverage_pct:.0%} of questions seen "
+            f"({counts.new} unseen). See more questions before relying on this score."
+        )
+    elif score.predicted_score >= 750:
         console.print(
             f"[bold green]Exam Readiness: READY[/bold green] — "
             f"Predicted {score.predicted_score}/900 (passing is 750)"
