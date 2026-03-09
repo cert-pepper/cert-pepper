@@ -20,6 +20,24 @@ from cert_pepper.engine.scorer import (
 
 console = Console()
 
+MIN_DOMAIN_COVERAGE = 0.50
+
+
+def domain_status_label(acc: float, attempts: int, total_questions: int) -> str:
+    """Return Rich-markup status string for a domain row.
+
+    'Mastered' is only shown when coverage (attempts / total_questions) has
+    reached MIN_DOMAIN_COVERAGE; below that threshold high accuracy shows
+    'On Track' instead, since the sample is too small to be conclusive.
+    """
+    coverage = attempts / total_questions if total_questions > 0 else 0.0
+    if acc >= 0.85 and coverage >= MIN_DOMAIN_COVERAGE:
+        return "[green]✓ Mastered[/green]"
+    elif acc >= 0.70:
+        return "[yellow]~ On Track[/yellow]"
+    else:
+        return "[red]✗ Weak[/red]"
+
 
 async def show_dashboard(exam_code: str | None = None) -> None:
     """Render the full progress dashboard."""
@@ -91,6 +109,19 @@ async def show_dashboard(exam_code: str | None = None) -> None:
             {"uid": user_id, "cert_id": cert_id},
         )
         domain_stats = {row[0]: (row[1], row[2]) for row in result.fetchall()}
+
+        # Total questions per domain (for coverage threshold check)
+        result = await session.execute(
+            text("""
+                SELECT d.number, COUNT(*) as total
+                FROM questions q
+                JOIN domains d ON d.id = q.domain_id
+                WHERE d.certification_id = :cert_id
+                GROUP BY d.number
+            """),
+            {"cert_id": cert_id},
+        )
+        domain_totals = {row[0]: row[1] for row in result.fetchall()}
 
         # Get predicted score and question coverage
         score = await predict_score(session, user_id, cert_id=cert_id)
@@ -233,14 +264,13 @@ async def show_dashboard(exam_code: str | None = None) -> None:
             correct = correct or 0
             acc = correct / total if total > 0 else 0
             acc_str = f"{acc:.0%}"
-            if acc >= 0.85:
-                status = "[green]✓ Mastered[/green]"
+            domain_total = domain_totals.get(num, 0)
+            status = domain_status_label(acc, total, domain_total)
+            if "Mastered" in status:
                 acc_color = "green"
-            elif acc >= 0.70:
-                status = "[yellow]~ On Track[/yellow]"
+            elif "On Track" in status:
                 acc_color = "yellow"
             else:
-                status = "[red]✗ Weak[/red]"
                 acc_color = "red"
             domain_table.add_row(
                 f"D{num}: {name[:30]}",
