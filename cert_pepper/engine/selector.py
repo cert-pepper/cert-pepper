@@ -157,6 +157,9 @@ async def select_question(
             return int(chosen)
         return int(rows[0][0])
 
+    if new_only:
+        return None  # No unseen questions remain; caller prints "No more questions available"
+
     # 4. Anything — least recently attempted
     result = await session.execute(
         text("""

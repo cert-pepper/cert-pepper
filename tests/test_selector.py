@@ -420,8 +420,8 @@ class TestNewOnly:
 
         assert result == unseen_id
 
-    async def test_new_only_falls_back_to_tier4_when_no_unseen(self, db):
-        """When new_only=True and no unseen questions exist, fall back to Tier 4."""
+    async def test_new_only_returns_none_when_no_unseen(self, db):
+        """When new_only=True and no unseen questions exist, return None (not Tier 4)."""
         now = datetime.utcnow()
         async with get_session() as session:
             user_id = await get_user_id(session)
@@ -437,8 +437,8 @@ class TestNewOnly:
             user_id = await get_user_id(session)
             result = await select_question(session, user_id, now=now, new_only=True)
 
-        # Tier 4 fallback returns the only question available
-        assert result == seen_id
+        # No unseen questions remain; caller should see None and stop the session
+        assert result is None
 
 
 # ---------------------------------------------------------------------------
