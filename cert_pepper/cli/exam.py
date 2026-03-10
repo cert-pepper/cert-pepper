@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+import math
+import signal
+import sys
+import threading
 import time
 
 from rich.console import Console
@@ -17,6 +21,14 @@ from cert_pepper.engine.selector import count_unseen_questions
 from cert_pepper.models.content import Question
 
 console = Console()
+
+
+class _TimeUpError(Exception):
+    """Raised by SIGALRM when the exam time limit expires."""
+
+
+def _sigalrm_handler(signum: int, frame: object) -> None:  # noqa: ARG001
+    raise _TimeUpError()
 
 
 async def get_question(session: AsyncSession, question_id: int) -> Question | None:
@@ -45,6 +57,33 @@ async def get_question(session: AsyncSession, question_id: int) -> Question | No
 def format_time(seconds: int) -> str:
     m, s = divmod(seconds, 60)
     return f"{m:02d}:{s:02d}"
+
+
+def _timer_thread(
+    start_time: float,
+    time_limit_seconds: float,
+    stop_event: threading.Event,
+    lines_above: int = 1,
+) -> None:
+    """Rewrite the timer line (lines_above lines above cursor) every second."""
+    while True:
+        elapsed = time.time() - start_time
+        remaining = max(0.0, time_limit_seconds - elapsed)
+        time_str = format_time(int(remaining))
+        if remaining > 1800:
+            color = "\033[32m"   # green
+        elif remaining > 600:
+            color = "\033[33m"   # yellow
+        else:
+            color = "\033[31m"   # red
+        reset = "\033[0m"
+        # Save cursor, move up to timer line, clear and rewrite, restore cursor
+        sys.stdout.write(
+            f"\033[s\033[{lines_above}A\r\033[2K{color}  Time remaining: {time_str}{reset}\033[u"
+        )
+        sys.stdout.flush()
+        if stop_event.wait(1.0):
+            break
 
 
 async def run_exam(
@@ -154,40 +193,83 @@ async def run_exam(
 
             questions[q_id] = q
 
-            # Display question with timer
-            time_str = format_time(int(remaining))
             domain_colors = {1: "blue", 2: "red", 3: "green", 4: "yellow", 5: "magenta"}
             color = domain_colors.get(q.domain_number, "white")
 
+            # Timer line first — thread will rewrite it in-place
+            elapsed_now = time.time() - start_time
+            remaining_now = max(0.0, time_limit_seconds - elapsed_now)
+            time_str_now = format_time(int(remaining_now))
+            time_color = (
+                "\033[32m" if remaining_now > 1800
+                else "\033[33m" if remaining_now > 600
+                else "\033[31m"
+            )
+            sys.stdout.write(f"{time_color}  Time remaining: {time_str_now}\033[0m\n")
+            sys.stdout.flush()
+
+            # Question header, stem, options
             console.print(
-                f"[dim]Question {i}/{actual_count} | "
-                f"[{color}]Domain {q.domain_number}[/{color}] | "
-                f"Time remaining: "
-                f"[{'green' if remaining > 1800 else 'yellow' if remaining > 600 else 'red'}]"
-                f"{time_str}[/]"
-                f"[/dim]"
+                f"[dim]Question {i}/{actual_count} | [{color}]Domain {q.domain_number}[/{color}][/dim]"
             )
             console.print(f"\n{q.stem}\n")
             for letter, text_val in q.options_dict().items():
                 console.print(f"  [bold]{letter})[/bold] {text_val}")
             console.print()
 
-            # Get answer
-            while True:
-                ans = Prompt.ask("Answer [A/B/C/D/Q=quit]").strip().upper()
-                if ans == "Q":
-                    console.print("\n[yellow]Exam ended early.[/yellow]")
-                    break
-                if ans in ("A", "B", "C", "D"):
-                    answers[q_id] = ans
-                    is_correct = ans == q.correct_answer
-                    if q.domain_number in domain_results:
-                        domain_results[q.domain_number].append(is_correct)
-                    console.print("[dim]Recorded.[/dim]\n")
-                    break
-                console.print("[red]Enter A, B, C, D, or Q.[/red]")
-            else:
-                pass
+            # Estimate how many lines down the prompt is from the timer line so the
+            # thread knows how far up to jump.  Components after the timer row:
+            #   1  header line
+            #   1  blank line before stem  (from leading \n in f"\n{stem}\n")
+            #   stem_lines  wrapped stem text
+            #   2  blank lines after stem  (trailing \n in f-string + Rich's own \n)
+            #   opt_lines  option rows
+            #   1  blank line  (console.print())
+            console_width = console.width or 80
+            stem_lines = max(1, math.ceil(len(q.stem) / (console_width - 2)))
+            opt_lines = sum(
+                max(1, math.ceil((4 + len(text_val)) / (console_width - 2)))
+                for text_val in q.options_dict().values()
+            )
+            lines_above = 1 + 1 + stem_lines + 2 + opt_lines + 1
+
+            # Set SIGALRM to fire exactly when the time limit expires
+            alarm_secs = max(1, math.ceil(time_limit_seconds - (time.time() - start_time)))
+            signal.signal(signal.SIGALRM, _sigalrm_handler)
+            signal.alarm(alarm_secs)
+
+            # Start live-timer thread
+            stop_timer = threading.Event()
+            timer_t = threading.Thread(
+                target=_timer_thread,
+                args=(start_time, time_limit_seconds, stop_timer, lines_above),
+                daemon=True,
+            )
+            timer_t.start()
+
+            # Get answer — _TimeUpError raised by SIGALRM interrupts Prompt.ask()
+            ans = ""
+            try:
+                while True:
+                    ans = Prompt.ask("Answer [A/B/C/D/Q=quit]").strip().upper()
+                    if ans == "Q":
+                        console.print("\n[yellow]Exam ended early.[/yellow]")
+                        break
+                    if ans in ("A", "B", "C", "D"):
+                        answers[q_id] = ans
+                        is_correct = ans == q.correct_answer
+                        if q.domain_number in domain_results:
+                            domain_results[q.domain_number].append(is_correct)
+                        console.print("[dim]Recorded.[/dim]\n")
+                        break
+                    console.print("[red]Enter A, B, C, D, or Q.[/red]")
+            except _TimeUpError:
+                console.print("\n[bold red]Time's up![/bold red]")
+                ans = "Q"
+            finally:
+                signal.alarm(0)  # cancel any pending alarm
+                stop_timer.set()
+                timer_t.join(timeout=2.0)
 
             if ans == "Q":
                 break
