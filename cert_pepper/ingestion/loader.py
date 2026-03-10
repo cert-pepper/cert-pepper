@@ -85,7 +85,7 @@ async def ingest_questions(
         if not dry_run:
             await session.execute(
                 text("""
-                    INSERT OR REPLACE INTO questions
+                    INSERT OR IGNORE INTO questions
                         (domain_id, number, stem, option_a, option_b, option_c, option_d,
                          correct_answer, explanation, source_file)
                     VALUES

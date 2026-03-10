@@ -14,7 +14,7 @@ import pytest
 from sqlalchemy import text
 
 from cert_pepper.db.connection import get_session
-from cert_pepper.engine.selector import select_question, select_exam_questions
+from cert_pepper.engine.selector import select_question, select_exam_questions, count_unseen_questions
 
 from cert_pepper.engine.selector import get_domain_weights, get_domain_accuracy
 from tests.conftest import (
@@ -485,3 +485,150 @@ class TestAccuracyWeightedSelection:
                     d1_count += 1
 
         assert d4_count >= d1_count
+
+
+# ---------------------------------------------------------------------------
+# select_exam_questions — prefer unseen
+# ---------------------------------------------------------------------------
+
+class TestSelectExamQuestionsPreferUnseen:
+    """Use a single-domain cert at 100% weight so slot allocation is predictable."""
+
+    async def _setup_single_domain_cert(self, session) -> tuple[int, int]:
+        """Create a cert with one domain at 100% weight; return (cert_id, domain_number=1)."""
+        cert_id = await seed_certification(session, "EXAM-UNSEEN-TEST")
+        await seed_domains_for_cert(session, cert_id, [(1, "All Topics", 100.0)])
+        await session.commit()
+        return cert_id
+
+    async def test_exam_returns_unseen_questions_when_available(self, db):
+        """With 5 questions and 3 attempted, select_exam_questions(total=2) returns unseen ones."""
+        async with get_session() as session:
+            user_id = await get_user_id(session)
+            cert_id = await self._setup_single_domain_cert(session)
+            sid = await seed_session(session, user_id)
+            q_ids = []
+            for n in range(1, 6):
+                qid = await seed_question(session, domain_number=1, number=n, cert_id=cert_id)
+                q_ids.append(qid)
+            for qid in q_ids[:3]:
+                await seed_attempt(session, user_id, qid, sid)
+            await session.commit()
+
+        unseen_ids = set(q_ids[3:])  # q_ids[3] and q_ids[4]
+
+        async with get_session() as session:
+            user_id = await get_user_id(session)
+            result = await select_exam_questions(session, user_id, total=2, cert_id=cert_id)
+
+        assert len(result) == 2
+        for qid in result:
+            assert qid in unseen_ids
+
+    async def test_exam_fills_from_seen_when_unseen_pool_short(self, db):
+        """With 1 unseen and total=3, unseen appears + 2 seen fill the gap."""
+        async with get_session() as session:
+            user_id = await get_user_id(session)
+            cert_id = await self._setup_single_domain_cert(session)
+            sid = await seed_session(session, user_id)
+            q_ids = []
+            for n in range(1, 6):
+                qid = await seed_question(session, domain_number=1, number=n, cert_id=cert_id)
+                q_ids.append(qid)
+            for qid in q_ids[:4]:
+                await seed_attempt(session, user_id, qid, sid)
+            await session.commit()
+
+        unseen_id = q_ids[4]
+
+        async with get_session() as session:
+            user_id = await get_user_id(session)
+            result = await select_exam_questions(session, user_id, total=3, cert_id=cert_id)
+
+        assert len(result) == 3
+        assert unseen_id in result
+
+    async def test_exam_works_when_all_questions_seen(self, db):
+        """When all questions have been attempted, returns requested count without error."""
+        async with get_session() as session:
+            user_id = await get_user_id(session)
+            cert_id = await self._setup_single_domain_cert(session)
+            sid = await seed_session(session, user_id)
+            q_ids = []
+            for n in range(1, 6):
+                qid = await seed_question(session, domain_number=1, number=n, cert_id=cert_id)
+                q_ids.append(qid)
+            for qid in q_ids:
+                await seed_attempt(session, user_id, qid, sid)
+            await session.commit()
+
+        async with get_session() as session:
+            user_id = await get_user_id(session)
+            result = await select_exam_questions(session, user_id, total=3, cert_id=cert_id)
+
+        assert len(result) == 3
+
+    async def test_exam_returns_all_unseen_when_pool_larger_than_needed(self, db):
+        """With 10 unseen questions and total=5, all returned IDs are unseen."""
+        async with get_session() as session:
+            user_id = await get_user_id(session)
+            cert_id = await self._setup_single_domain_cert(session)
+            for n in range(1, 11):
+                await seed_question(session, domain_number=1, number=n, cert_id=cert_id)
+            await session.commit()
+
+        async with get_session() as session:
+            user_id = await get_user_id(session)
+            result = await select_exam_questions(session, user_id, total=5, cert_id=cert_id)
+
+            for qid in result:
+                row = await session.execute(
+                    text("SELECT COUNT(*) FROM question_attempts WHERE question_id = :qid AND user_id = :uid"),
+                    {"qid": qid, "uid": user_id},
+                )
+                assert row.scalar() == 0
+
+        assert len(result) == 5
+
+
+# ---------------------------------------------------------------------------
+# count_unseen_questions
+# ---------------------------------------------------------------------------
+
+class TestCountUnseenQuestions:
+    async def test_all_unseen_when_no_attempts(self, db):
+        async with get_session() as session:
+            user_id = await get_user_id(session)
+            cert_id = await get_cert_id(session, "SY0-701")
+            for n in range(1, 6):
+                await seed_question(session, domain_number=4, number=n)
+            await session.commit()
+
+        async with get_session() as session:
+            user_id = await get_user_id(session)
+            cert_id = await get_cert_id(session, "SY0-701")
+            unseen, total = await count_unseen_questions(session, user_id, cert_id)
+
+        assert total == 5
+        assert unseen == 5
+
+    async def test_seen_and_unseen_counts(self, db):
+        async with get_session() as session:
+            user_id = await get_user_id(session)
+            cert_id = await get_cert_id(session, "SY0-701")
+            sid = await seed_session(session, user_id)
+            q_ids = []
+            for n in range(1, 6):
+                qid = await seed_question(session, domain_number=4, number=n)
+                q_ids.append(qid)
+            await seed_attempt(session, user_id, q_ids[0], sid)
+            await seed_attempt(session, user_id, q_ids[1], sid)
+            await session.commit()
+
+        async with get_session() as session:
+            user_id = await get_user_id(session)
+            cert_id = await get_cert_id(session, "SY0-701")
+            unseen, total = await count_unseen_questions(session, user_id, cert_id)
+
+        assert total == 5
+        assert unseen == 3

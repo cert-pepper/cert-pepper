@@ -48,10 +48,12 @@ To use hand-crafted markdown content instead, see [Adding Your Own Exam](#adding
 |---------|-------------|
 | `cert-pepper db init` | Create the SQLite schema |
 | `cert-pepper ingest [--dry-run]` | Parse markdown content into the DB |
-| `cert-pepper study [--domain N] [--count N]` | Adaptive study session |
+| `cert-pepper study [--domain N] [--count N] [--new-questions]` | Adaptive study session |
 | `cert-pepper exam` | 90-question timed mock exam |
 | `cert-pepper progress` | Dashboard: accuracy, predicted score, weak areas |
 | `cert-pepper pregenerate` | Batch-generate AI explanations (requires API key) |
+| `cert-pepper goal set --exam-date YYYY-MM-DD [--hours N]` | Set exam date and study hour target |
+| `cert-pepper goal show` | Show schedule pace and study calendar |
 
 ---
 
@@ -95,7 +97,7 @@ The Security+ content in `examples/security-plus/` is a complete reference imple
 | `ANTHROPIC_API_KEY` | — | Required for CLI AI explanations (`study`, `pregenerate`). Not needed in Claude Code. |
 | `HAIKU_MODEL` | `claude-haiku-4-5-20251001` | Model for AI explanations |
 | `SONNET_MODEL` | `claude-sonnet-4-6` | Model for MCP sampling |
-| `DEFAULT_SESSION_SIZE` | `10` | Questions per study session |
+| `DEFAULT_SESSION_SIZE` | `25` | Questions per study session |
 | `MASTERY_THRESHOLD` | `0.85` | BKT mastery cutoff |
 
 ---
@@ -111,7 +113,7 @@ cert-pepper/
 │   ├── ingestion/        — Markdown parsers
 │   ├── ai/               — Anthropic client + explainer
 │   └── db/               — SQLAlchemy async engine + schema
-├── tests/                — pytest suite (197 tests)
+├── tests/                — pytest suite (313 tests)
 ├── examples/
 │   └── security-plus/    — Security+ SY0-701 exam content
 └── docs/

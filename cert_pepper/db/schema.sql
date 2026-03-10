@@ -47,7 +47,8 @@ CREATE TABLE IF NOT EXISTS questions (
     explanation     TEXT NOT NULL DEFAULT '',
     difficulty      REAL NOT NULL DEFAULT 0.3,  -- 0.0 easy → 1.0 hard
     source_file     TEXT NOT NULL DEFAULT '',
-    created_at      DATETIME DEFAULT CURRENT_TIMESTAMP
+    created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(domain_id, number)
 );
 
 CREATE TABLE IF NOT EXISTS flashcards (

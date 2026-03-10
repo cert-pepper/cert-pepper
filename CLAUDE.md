@@ -108,7 +108,7 @@ examples/security-plus/  (or CONTENT_ROOT)
 - `fsrs.py`: FSRS-4.5 scheduler. `FSRSCard` is a mutable dataclass. Call `schedule(card, rating, now)` → returns a new card. **Difficulty uses a 1–10 scale** (not 0–1); higher = harder. `initial_difficulty(4)` ≈ 3.3 (easy), `initial_difficulty(1)` ≈ 7.2 (hard).
 - `bkt.py`: Bayesian Knowledge Tracing. `update(params, is_correct)` → new `BKTParams`. Pure functional — no mutation.
 - `selector.py`: Adaptive question selection. Priority: overdue review cards → due learning cards → unseen questions (weighted by domain weight) → least-recently-attempted.
-- `scorer.py`: Predicted score = Σ(domain_accuracy × weight) × 900. Pass probability uses logistic sigmoid centered at 750.
+- `scorer.py`: For each domain, the predicted score blends raw accuracy with a 0.5 prior for unseen questions: `adjusted = (raw_acc × seen + 0.5 × unseen) / total`, then `Σ(adjusted × weight) × 900`. When coverage is low, this keeps the predicted score from inflating. Pass probability uses logistic sigmoid centered at 750.
 
 **`ingestion/`** — Three parsers for the markdown formats:
 - `questions.py`: Splits on `---`, extracts `**QN.**` headers, A/B/C/D options, `<details>` answer blocks. Domain number comes from filename (`domain1-practice.md` → 1).

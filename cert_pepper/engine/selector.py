@@ -185,7 +185,11 @@ async def select_exam_questions(
     total: int = 90,
     cert_id: int | None = None,
 ) -> list[int]:
-    """Select questions proportionally by domain weight for a mock exam."""
+    """Select questions proportionally by domain weight for a mock exam.
+
+    Unseen questions (no prior attempts) are preferred. If a domain's unseen
+    pool is smaller than its quota, seen questions fill the remainder.
+    """
     if cert_id is None:
         from cert_pepper.db.exams import resolve_cert_id
         cert_id = await resolve_cert_id(session)
@@ -195,6 +199,10 @@ async def select_exam_questions(
 
     for domain_num, weight in domain_weights.items():
         count = round(total * weight)
+        if count == 0:
+            continue
+
+        # Pass 1 — unseen questions first
         result = await session.execute(
             text("""
                 SELECT q.id
@@ -202,12 +210,48 @@ async def select_exam_questions(
                 JOIN domains d ON d.id = q.domain_id
                 WHERE d.number = :domain_num
                 AND d.certification_id = :cert_id
+                AND NOT EXISTS (
+                    SELECT 1 FROM question_attempts qa
+                    WHERE qa.question_id = q.id AND qa.user_id = :user_id
+                )
                 ORDER BY RANDOM()
                 LIMIT :count
             """),
-            {"domain_num": domain_num, "count": count, "cert_id": cert_id},
+            {"domain_num": domain_num, "count": count, "cert_id": cert_id, "user_id": user_id},
         )
-        question_ids.extend(row[0] for row in result.fetchall())
+        pass1 = [row[0] for row in result.fetchall()]
+        domain_selected = pass1
+
+        # Pass 2 — top up with seen questions if needed
+        remaining = count - len(pass1)
+        if remaining > 0:
+            exclude = pass1 if pass1 else [-1]
+            exclude_str = ",".join(str(i) for i in exclude)
+            result = await session.execute(
+                text(f"""
+                    SELECT q.id
+                    FROM questions q
+                    JOIN domains d ON d.id = q.domain_id
+                    WHERE d.number = :domain_num
+                    AND d.certification_id = :cert_id
+                    AND EXISTS (
+                        SELECT 1 FROM question_attempts qa
+                        WHERE qa.question_id = q.id AND qa.user_id = :user_id
+                    )
+                    AND q.id NOT IN ({exclude_str})
+                    ORDER BY RANDOM()
+                    LIMIT :remaining
+                """),
+                {
+                    "domain_num": domain_num,
+                    "cert_id": cert_id,
+                    "user_id": user_id,
+                    "remaining": remaining,
+                },
+            )
+            domain_selected = pass1 + [row[0] for row in result.fetchall()]
+
+        question_ids.extend(domain_selected)
 
     # Shuffle final list
     random.shuffle(question_ids)
@@ -217,3 +261,27 @@ async def select_exam_questions(
         question_ids = question_ids[:total]
 
     return question_ids
+
+
+async def count_unseen_questions(
+    session: AsyncSession, user_id: int, cert_id: int
+) -> tuple[int, int]:
+    """Return (unseen_count, total_count) for this user across all domains."""
+    result = await session.execute(
+        text("""
+            SELECT
+                COUNT(*) AS total,
+                SUM(CASE WHEN NOT EXISTS (
+                    SELECT 1 FROM question_attempts qa
+                    WHERE qa.question_id = q.id AND qa.user_id = :user_id
+                ) THEN 1 ELSE 0 END) AS unseen
+            FROM questions q
+            JOIN domains d ON d.id = q.domain_id
+            WHERE d.certification_id = :cert_id
+        """),
+        {"user_id": user_id, "cert_id": cert_id},
+    )
+    row = result.fetchone()
+    total = int(row[0]) if row and row[0] else 0
+    unseen = int(row[1]) if row and row[1] else 0
+    return unseen, total

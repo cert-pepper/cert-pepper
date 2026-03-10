@@ -188,6 +188,8 @@ Only cards due for review today appear. No new questions, no cramming.
 uv run cert-pepper study
 ```
 
+To check whether any questions remain unseen before the exam: `uv run cert-pepper study --new-questions`
+
 Or in Claude Code:
 
 - "Show me my cards due for review today and quiz me on them."
@@ -207,7 +209,7 @@ Pass probability:   94%
 Weakest domain:     Domain 3 (Security Architecture) — 71%
 ```
 
-The predicted score is calculated as: `Σ(domain_accuracy × domain_weight) × 900`. Pass probability uses a logistic sigmoid centered at 750. Neither figure predicts your real exam result.
+The predicted score blends your accuracy on seen questions with a 50% prior for unseen ones: `Σ(adjusted_accuracy × domain_weight) × 900`, where `adjusted_accuracy = (raw_accuracy × seen + 0.5 × unseen) / total`. Pass probability uses a logistic sigmoid centered at 750. Neither figure predicts your real exam result.
 
 ---
 

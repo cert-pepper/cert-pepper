@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from cert_pepper.db.connection import get_session
 from cert_pepper.engine import selector
+from cert_pepper.engine.selector import count_unseen_questions
 from cert_pepper.models.content import Question
 
 console = Console()
@@ -108,7 +109,13 @@ async def run_exam(
             return
 
         actual_count = len(question_ids)
-        console.print(f"\n[cyan]Starting exam with {actual_count} questions...[/cyan]\n")
+        unseen_count, total_pool = await count_unseen_questions(session, user_id, cert_id)
+        seen_count = actual_count - min(unseen_count, actual_count)
+        new_in_exam = min(unseen_count, actual_count)
+        console.print(
+            f"\n[cyan]{actual_count} questions selected"
+            f" — {new_in_exam} new, {seen_count} previously seen[/cyan]\n"
+        )
 
         # Create exam session
         await session.execute(
