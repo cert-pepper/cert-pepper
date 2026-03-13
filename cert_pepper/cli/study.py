@@ -301,12 +301,14 @@ async def run_study_session(
             # Get answer
             hint_used = False
             q_start = time.time()
+            quit_session = False
 
             while True:
                 try:
                     answer, hint_requested = get_answer_from_user(use_ai=use_ai)
                 except KeyboardInterrupt:
                     console.print("\n[yellow]Session ended early.[/yellow]")
+                    quit_session = True
                     break
 
                 if answer == "HINT" and use_ai:
@@ -321,8 +323,8 @@ async def run_study_session(
                     continue
 
                 break
-            else:
-                # KeyboardInterrupt inner loop — break outer
+
+            if quit_session:
                 break
 
             time_taken = time.time() - q_start
