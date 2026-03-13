@@ -210,7 +210,8 @@ async def run_exam(
 
             # Question header, stem, options
             console.print(
-                f"[dim]Question {i}/{actual_count} | [{color}]Domain {q.domain_number}[/{color}][/dim]"
+                f"[dim]Question {i}/{actual_count} | "
+                f"[{color}]Domain {q.domain_number}[/{color}][/dim]"
             )
             console.print(f"\n{q.stem}\n")
             for letter, text_val in q.options_dict().items():
