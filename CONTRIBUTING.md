@@ -9,8 +9,10 @@ Thanks for your interest in contributing. This guide covers setup, workflow, and
 
 ## Dev Setup
 
+1. Fork the repo and clone your fork:
+
 ```bash
-git clone https://github.com/cert-pepper/cert-pepper.git
+git clone https://github.com/<your-username>/cert-pepper.git
 cd cert-pepper
 cp .env.example .env
 uv sync
@@ -19,6 +21,14 @@ uv run cert-pepper ingest
 ```
 
 This creates a working database with the bundled Security+ example content.
+
+2. Create a branch from `main`. Branch names must use one of these prefixes:
+
+```
+feature/  fix/  hotfix/  docs/  chore/  ci/
+```
+
+For example: `feature/add-network-plus-content` or `fix/scorer-rounding`.
 
 ## TDD Red-Green Workflow
 
@@ -38,7 +48,9 @@ uv run ruff check cert_pepper/       # lint
 uv run mypy cert_pepper/             # type check
 ```
 
-## Pull Request Checklist
+## Pull Requests
+
+PRs are squash-merged into `main`. The PR title becomes the commit message, so keep it concise and descriptive.
 
 Before opening a PR, verify:
 
@@ -47,6 +59,8 @@ Before opening a PR, verify:
 - [ ] `uv run mypy cert_pepper/` is clean
 - [ ] `CHANGELOG.md` updated (if the change is user-facing)
 - [ ] New tests cover the change
+
+All review threads must be resolved before merging. If you push new commits after receiving approval, the reviewer will need to re-approve.
 
 ## Content Authoring
 
