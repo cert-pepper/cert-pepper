@@ -161,6 +161,27 @@ PASSING_SCORE = 750
 MAX_SCORE = 900
 WEAK_AREA_THRESHOLD = 0.70
 
+_PEPPER_SCALE: list[str] = [
+    "Bell Pepper",
+    "Banana Pepper",
+    "Poblano",
+    "Jalapeño",
+    "Serrano",
+    "Cayenne",
+    "Thai Chili",
+    "Habanero",
+    "Ghost Pepper",
+    "Carolina Reaper",
+]
+
+
+def pepper_score(pass_probability: float) -> tuple[int, str]:
+    """Return (level, pepper_name) for a 1-10 pepper spice scale."""
+    clamped = max(0.0, min(1.0, pass_probability))
+    # 0.0-0.099 → 0, 0.10-0.199 → 1, ... 0.90-1.0 → 9
+    index = min(int(clamped * 10), 9)
+    return (index + 1, _PEPPER_SCALE[index])
+
 
 async def get_domain_accuracies(
     session: AsyncSession,

@@ -15,6 +15,7 @@ from cert_pepper.engine.scorer import (
     get_question_counts,
     get_recommendations,
     get_weak_areas,
+    pepper_score,
     predict_score,
 )
 
@@ -315,24 +316,29 @@ async def show_dashboard(exam_code: str | None = None) -> None:
     else:
         console.print("[green]No weak areas detected. Great work![/green]")
 
-    # Exam readiness
+    # Pepper Score (exam readiness)
     console.print()
-    MIN_COVERAGE = 0.50
-    if score.coverage_pct < MIN_COVERAGE:
-        console.print(
-            f"[bold yellow]Exam Readiness: TOO EARLY TO TELL[/bold yellow] — "
-            f"Only {score.coverage_pct:.0%} of questions seen "
-            f"({counts.new} unseen). See more questions before relying on this score."
-        )
-    elif score.predicted_score >= 750:
-        console.print(
-            f"[bold green]Exam Readiness: READY[/bold green] — "
-            f"Predicted {score.predicted_score}/900 (passing is 750)"
-        )
+    level, pepper_name = pepper_score(score.pass_probability)
+    if level >= 8:
+        level_color = "red"
+    elif level >= 5:
+        level_color = "yellow"
     else:
-        points_needed = 750 - score.predicted_score
-        console.print(
-            f"[bold yellow]Exam Readiness: NEEDS WORK[/bold yellow] — "
-            f"Need {points_needed} more points. Focus on high-weight domains!"
+        level_color = "green"
+
+    filled = "\u2588" * level
+    empty = "\u2591" * (10 - level)
+    heat_bar = f"[{level_color}]{filled}[/{level_color}][dim]{empty}[/dim]"
+
+    score_line = (
+        f"Pepper Score: {heat_bar} {pepper_name}"
+        f" (Predicted Score {score.predicted_score}/900"
+        f" \u00b7 {score.pass_probability:.0%} pass prob)"
+    )
+    if score.coverage_pct < 0.50:
+        score_line += (
+            f" \u2014 Only {score.coverage_pct:.0%} coverage,"
+            " score may change"
         )
+    console.print(f"[bold]{score_line}[/bold]")
     console.print()

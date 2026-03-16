@@ -22,6 +22,7 @@ from cert_pepper.engine.scorer import (
     get_day_statuses,
     get_domain_accuracies,
     get_question_counts,
+    pepper_score,
     predict_score,
     get_weak_areas,
     get_recommendations,
@@ -806,3 +807,73 @@ class TestCoverageAdjustedScore:
 
         # effective_acc[1] = (1.0 * 1 + 0.5 * 1) / 2 = 0.75
         assert score.domain_accuracies[1] == pytest.approx(0.75)
+
+
+# ---------------------------------------------------------------------------
+# pepper_score (pure function)
+# ---------------------------------------------------------------------------
+
+class TestPepperScore:
+    def test_returns_tuple_of_int_str(self):
+        result = pepper_score(0.5)
+        assert isinstance(result, tuple)
+        assert len(result) == 2
+        level, name = result
+        assert isinstance(level, int)
+        assert isinstance(name, str)
+
+    def test_zero_percent_returns_bell_pepper(self):
+        level, name = pepper_score(0.0)
+        assert level == 1
+        assert name == "Bell Pepper"
+
+    def test_hundred_percent_returns_carolina_reaper(self):
+        level, name = pepper_score(1.0)
+        assert level == 10
+        assert name == "Carolina Reaper"
+
+    def test_ten_percent_boundary_is_banana_pepper(self):
+        level, name = pepper_score(0.10)
+        assert level == 2
+        assert name == "Banana Pepper"
+
+    def test_fifty_percent_is_serrano(self):
+        level, name = pepper_score(0.50)
+        assert level == 6
+        assert name == "Cayenne"
+
+    def test_ninety_percent_boundary(self):
+        level, name = pepper_score(0.90)
+        assert level == 10
+        assert name == "Carolina Reaper"
+
+    def test_just_below_ten_percent_is_bell_pepper(self):
+        level, name = pepper_score(0.099)
+        assert level == 1
+        assert name == "Bell Pepper"
+
+    def test_negative_clamps_to_level_one(self):
+        level, name = pepper_score(-0.5)
+        assert level == 1
+        assert name == "Bell Pepper"
+
+    def test_above_one_clamps_to_level_ten(self):
+        level, name = pepper_score(1.5)
+        assert level == 10
+        assert name == "Carolina Reaper"
+
+    def test_mid_range_levels(self):
+        # 35% → level 4 (Jalapeño)
+        level, name = pepper_score(0.35)
+        assert level == 4
+        assert name == "Jalapeño"
+
+    def test_habanero_at_seventy_five(self):
+        level, name = pepper_score(0.75)
+        assert level == 8
+        assert name == "Habanero"
+
+    def test_ghost_pepper_at_eighty_five(self):
+        level, name = pepper_score(0.85)
+        assert level == 9
+        assert name == "Ghost Pepper"
