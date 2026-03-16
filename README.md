@@ -7,9 +7,18 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="License: MIT"></a>
 </div>
 
-<br>
+<p align="center">
+  <a href="#quick-start">Quick Start</a> ·
+  <a href="docs/walkthrough.md">Walkthrough</a> ·
+  <a href="#cli-reference">CLI Reference</a> ·
+  <a href="#mcp-integration">MCP Integration</a> ·
+  <a href="docs/content-format.md">Content Format</a> ·
+  <a href="CONTRIBUTING.md">Contributing</a>
+</p>
 
-CertPepper is an AI-powered adaptive certification prep tool. ***It learns what you don't know.***
+***It learns what you don't know.***
+
+If you want adaptive exam prep that runs locally, learns your weak spots, and explains your mistakes — this is it.
 
 CertPepper ingests your exam content (questions, flashcards, acronyms) and runs an adaptive study loop using **FSRS-4.5 spaced repetition** and **Bayesian Knowledge Tracing**. Wrong answers get AI explanations from Claude. Three MCP servers connect the study engine, content, and analytics to Claude Code.
 
@@ -147,9 +156,9 @@ cert-pepper/
 The `examples/security-plus/` directory contains a complete Security+ SY0-701 exam prep set:
 
 - 5 domains of notes
-- 74 flashcards
-- 30 practice questions across 3 domains
-- 138 acronyms
+- 135 flashcards
+- 228 practice questions across all 5 domains
+- 247 acronyms
 
 See [docs/walkthrough.md](docs/walkthrough.md) for a step-by-step guide showing how to use CertPepper to prepare for Security+ in 10 days.
 
