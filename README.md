@@ -2,7 +2,7 @@
 
 <div align="center">
   <img src="docs/assets/CertPepper_logo.png" alt="CertPepper" width="80%"><br>
-  <em><strong>It learns what you don't know.</strong></em>
+  <em><strong>IT LEARNS WHAT YOU DON'T KNOW.</strong></em>
   <br><br>
   <a href="https://github.com/crook3dfingers/cert-pepper/actions/workflows/ci.yml"><img src="https://github.com/crook3dfingers/cert-pepper/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/python-3.12%2B-blue" alt="Python 3.12+"></a>
