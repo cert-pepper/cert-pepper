@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to cert-pepper are documented here.
+All notable changes to CertPepper are documented here.
 
 ## [0.5.4] — 2026-03-08
 

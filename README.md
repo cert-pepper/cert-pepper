@@ -1,14 +1,18 @@
-# cert-pepper
+<p align="center">
+  <img src="docs/assets/CertPepper_logo.png" alt="CertPepper" width="400">
+</p>
 
-[![CI](https://github.com/crook3dfingers/cert-pepper/actions/workflows/ci.yml/badge.svg)](https://github.com/crook3dfingers/cert-pepper/actions/workflows/ci.yml)
-[![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue)](https://www.python.org/downloads/)
-[![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+<p align="center">
+  <a href="https://github.com/crook3dfingers/cert-pepper/actions/workflows/ci.yml"><img src="https://github.com/crook3dfingers/cert-pepper/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/python-3.12%2B-blue" alt="Python 3.12+"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="License: MIT"></a>
+</p>
 
 AI-powered adaptive certification prep. Learns what you don't know.
 
-cert-pepper ingests your exam content (questions, flashcards, acronyms) into SQLite and runs an adaptive study loop using **FSRS-4.5 spaced repetition** and **Bayesian Knowledge Tracing**. Wrong answers get AI explanations from Claude. Three MCP servers connect the study engine, content, and analytics to Claude Code.
+CertPepper ingests your exam content (questions, flashcards, acronyms) into SQLite and runs an adaptive study loop using **FSRS-4.5 spaced repetition** and **Bayesian Knowledge Tracing**. Wrong answers get AI explanations from Claude. Three MCP servers connect the study engine, content, and analytics to Claude Code.
 
-> **No guarantees.** cert-pepper is a study tool. Predicted scores and pass probabilities are estimates based on your practice performance — they are not predictions of real exam outcomes. Use at your own risk.
+> **No guarantees.** CertPepper is a study tool. Predicted scores and pass probabilities are estimates based on your practice performance — they are not predictions of real exam outcomes. Use at your own risk.
 
 **Worked example:** [Security+ SY0-701: 10-day study plan](docs/walkthrough.md)
 
@@ -84,7 +88,7 @@ echo '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | .venv/bin/cert-pepper-st
 
 ## Adding Your Own Exam
 
-1. Create a content directory with your exam material in the cert-pepper markdown format (see [docs/content-format.md](docs/content-format.md)).
+1. Create a content directory with your exam material in the CertPepper markdown format (see [docs/content-format.md](docs/content-format.md)).
 2. Set `CONTENT_ROOT=/path/to/your/content` in `.env`.
 3. Run `cert-pepper db init` and `cert-pepper ingest`.
 
@@ -108,7 +112,7 @@ The Security+ content in `examples/security-plus/` is a complete reference imple
 
 ## How It Works
 
-cert-pepper combines three techniques to focus your study time where it matters:
+CertPepper combines three techniques to focus your study time where it matters:
 
 - **FSRS-4.5 spaced repetition** schedules reviews at optimal intervals based on your recall history.
 - **Bayesian Knowledge Tracing** estimates mastery per domain and steers new questions toward your weakest areas.
@@ -146,7 +150,7 @@ The `examples/security-plus/` directory contains a complete Security+ SY0-701 ex
 - 30 practice questions across 3 domains
 - 138 acronyms
 
-See [docs/walkthrough.md](docs/walkthrough.md) for a step-by-step guide showing how to use cert-pepper to prepare for Security+ in 10 days.
+See [docs/walkthrough.md](docs/walkthrough.md) for a step-by-step guide showing how to use CertPepper to prepare for Security+ in 10 days.
 
 ---
 

@@ -2,7 +2,7 @@
 
 CompTIA recommends 40 hours of study for Security+ — 4 hours per day for 10 days. This guide is for candidates with an IT or security background who want a compressed schedule. If you're starting fresh, extend to 3–4 weeks.
 
-cert-pepper does not guarantee exam results — outcomes depend on your prior knowledge, study effort, and exam conditions. This walkthrough assumes you're using **Claude Code with MCP enabled** — that's the recommended path. A manual CLI alternative is included in each section.
+CertPepper does not guarantee exam results — outcomes depend on your prior knowledge, study effort, and exam conditions. This walkthrough assumes you're using **Claude Code with MCP enabled** — that's the recommended path. A manual CLI alternative is included in each section.
 
 ---
 

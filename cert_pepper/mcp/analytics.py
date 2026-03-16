@@ -355,7 +355,7 @@ async def progress_dashboard() -> str:
         else f"{score.coverage_pct:.0%} seen — sufficient for score estimate."
     )
 
-    report = f"""# cert-pepper Progress Dashboard
+    report = f"""# CertPepper Progress Dashboard
 
 ## Overview
 - **Total Questions**: {total:,}

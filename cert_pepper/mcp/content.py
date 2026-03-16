@@ -394,7 +394,7 @@ _VENDOR_SUBREDDITS: dict[str, str] = {
 
 _REDDIT_SEARCH_URL = "https://www.reddit.com/search.json"
 _REDDIT_SUBREDDIT_URL = "https://www.reddit.com/r/{sub}/search.json"
-_REDDIT_HEADERS = {"User-Agent": "cert-pepper/1.0 (exam study tool; educational use)"}
+_REDDIT_HEADERS = {"User-Agent": "CertPepper/1.0 (exam study tool; educational use)"}
 
 _RESEARCH_SYNTHESIS_SYSTEM = """\
 You are a certification exam intelligence analyst. Read community discussion \

@@ -158,7 +158,7 @@ async def show_dashboard(exam_code: str | None = None) -> None:
     console.print()
     console.print(
         Panel(
-            "[bold cyan]cert-pepper Progress Dashboard[/bold cyan]",
+            "[bold cyan]CertPepper Progress Dashboard[/bold cyan]",
             subtitle=cert_label,
             border_style="cyan",
         )

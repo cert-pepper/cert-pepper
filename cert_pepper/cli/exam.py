@@ -95,7 +95,7 @@ async def run_exam(
     console.print()
     console.print(
         Panel(
-            f"[bold cyan]cert-pepper Mock Exam[/bold cyan]\n\n"
+            f"[bold cyan]CertPepper Mock Exam[/bold cyan]\n\n"
             f"{total_questions} questions | {time_limit_minutes} minutes\n\n"
             f"[yellow]Press Q at any question to end the exam early.[/yellow]",
             border_style="cyan",

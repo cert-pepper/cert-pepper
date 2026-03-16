@@ -1,4 +1,4 @@
-# Contributing to cert-pepper
+# Contributing to CertPepper
 
 Thanks for your interest in contributing. This guide covers setup, workflow, and conventions.
 

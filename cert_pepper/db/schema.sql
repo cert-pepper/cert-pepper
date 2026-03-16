@@ -1,4 +1,4 @@
--- cert-pepper database schema
+-- CertPepper database schema
 -- SQLite-compatible; PostgreSQL migration path via SQLAlchemy
 
 PRAGMA foreign_keys = ON;

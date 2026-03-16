@@ -1,6 +1,6 @@
 # Content Format Reference
 
-This document describes the markdown format cert-pepper uses for exam content. All three content types (questions, flashcards, acronyms) are plain text files that the ingestion parsers read.
+This document describes the markdown format CertPepper uses for exam content. All three content types (questions, flashcards, acronyms) are plain text files that the ingestion parsers read.
 
 ---
 

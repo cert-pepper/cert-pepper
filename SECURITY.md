@@ -2,7 +2,7 @@
 
 ## Reporting a Vulnerability
 
-If you discover a security vulnerability in cert-pepper, report it through GitHub's private vulnerability reporting:
+If you discover a security vulnerability in CertPepper, report it through GitHub's private vulnerability reporting:
 
 1. Go to the [Security tab](https://github.com/crook3dfingers/cert-pepper/security) of this repository.
 2. Click **"Report a vulnerability"**.
@@ -18,9 +18,9 @@ We aim to acknowledge reports within 7 days and resolve confirmed vulnerabilitie
 
 This policy covers:
 
-- The cert-pepper CLI application
+- The CertPepper CLI application
 - The three MCP servers (study-engine, content, analytics)
-- Dependencies used by cert-pepper
+- Dependencies used by CertPepper
 
 Out of scope:
 

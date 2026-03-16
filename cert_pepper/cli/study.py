@@ -247,7 +247,7 @@ async def run_study_session(
     """Run an interactive study session."""
     console.print(
         Panel(
-            "[bold cyan]cert-pepper Study Session[/bold cyan]\n"
+            "[bold cyan]CertPepper Study Session[/bold cyan]\n"
             f"Domain: {f'Domain {domain}' if domain else 'Adaptive (all domains)'} | "
             f"Questions: {count}",
             border_style="cyan",
