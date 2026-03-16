@@ -111,7 +111,7 @@ examples/security-plus/  (or CONTENT_ROOT)
 - `scorer.py`: For each domain, the predicted score blends raw accuracy with a 0.5 prior for unseen questions: `adjusted = (raw_acc × seen + 0.5 × unseen) / total`, then `Σ(adjusted × weight) × 900`. When coverage is low, this keeps the predicted score from inflating. Pass probability uses logistic sigmoid centered at 750.
 
 **`ingestion/`** — Three parsers for the markdown formats:
-- `questions.py`: Splits on `---`, extracts `**QN.**` headers, A/B/C/D options, `<details>` answer blocks. Domain number comes from filename (`domain1-practice.md` → 1).
+- `questions.py`: Splits on `---`, extracts `**QN.**` headers, A/B/C/D options, `<details>` answer blocks. Domain number comes from filename (`domain1-practice.md` → 1). 228 questions across all 5 domains (D1:47, D2:48, D3:37, D4:45, D5:51).
 - `flashcards.py`: Line-by-line scan. `## Section` sets category; `**Term** → Back | Tip` lines become cards.
 - `acronyms.py`: Parses `| Acronym | Full Term |` table rows; `## Section` sets category.
 

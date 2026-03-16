@@ -4,7 +4,7 @@
   <img src="docs/assets/CertPepper_logo.png" alt="CertPepper" width="80%"><br>
   <em><strong>IT LEARNS WHAT YOU DON'T KNOW.</strong></em>
   <br><br>
-  <a href="https://github.com/crook3dfingers/cert-pepper/actions/workflows/ci.yml"><img src="https://github.com/crook3dfingers/cert-pepper/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://github.com/cert-pepper/cert-pepper/actions/workflows/ci.yml"><img src="https://github.com/cert-pepper/cert-pepper/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/python-3.12%2B-blue" alt="Python 3.12+"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="License: MIT"></a>
 </div>
@@ -35,11 +35,11 @@ CertPepper ingests your exam content (questions, flashcards, acronyms) and runs 
 curl -LsSf https://astral.sh/uv/install.sh | sh
 
 # Option 1: download the latest release
-curl -L https://github.com/crook3dfingers/cert-pepper/archive/refs/tags/v0.5.4.tar.gz | tar xz
-cd cert-pepper-0.5.4
+curl -L https://github.com/cert-pepper/cert-pepper/archive/refs/tags/v0.6.0.tar.gz | tar xz
+cd cert-pepper-0.6.0
 
 # Option 2: clone (to track future updates)
-# git clone https://github.com/crook3dfingers/cert-pepper.git
+# git clone https://github.com/cert-pepper/cert-pepper.git
 # cd cert-pepper
 
 cp .env.example .env          # add ANTHROPIC_API_KEY for AI explanations in CLI study sessions
@@ -115,7 +115,7 @@ The Security+ content in `examples/security-plus/` is a complete reference imple
 | `ANTHROPIC_API_KEY` | — | Required for CLI AI explanations (`study`, `pregenerate`). Not needed in Claude Code. |
 | `HAIKU_MODEL` | `claude-haiku-4-5-20251001` | Model for AI explanations |
 | `SONNET_MODEL` | `claude-sonnet-4-6` | Model for MCP sampling |
-| `DEFAULT_SESSION_SIZE` | `25` | Questions per study session |
+| `DEFAULT_SESSION_SIZE` | `10` | Questions per study session |
 | `MASTERY_THRESHOLD` | `0.85` | BKT mastery cutoff |
 
 ---
@@ -158,7 +158,7 @@ The `examples/security-plus/` directory contains a complete Security+ SY0-701 ex
 - 5 domains of notes
 - 135 flashcards
 - 228 practice questions across all 5 domains
-- 247 acronyms
+- 262 acronyms
 
 See [docs/walkthrough.md](docs/walkthrough.md) for a step-by-step guide showing how to use CertPepper to prepare for Security+ in 10 days.
 

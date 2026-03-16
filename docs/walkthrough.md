@@ -1,5 +1,7 @@
 # Preparing for Security+ SY0-701: A 10-Day Sprint
 
+The CertPepper author used this content and schedule to pass Security+ on the first attempt.
+
 CompTIA recommends 40 hours of study for Security+ — 4 hours per day for 10 days. This guide is for candidates with an IT or security background who want a compressed schedule. If you're starting fresh, extend to 3–4 weeks.
 
 CertPepper does not guarantee exam results — outcomes depend on your prior knowledge, study effort, and exam conditions. This walkthrough assumes you're using **Claude Code with MCP enabled** — that's the recommended path. A manual CLI alternative is included in each section.
@@ -37,10 +39,10 @@ Passing score: **750 / 900** (~83%). Time limit: 90 minutes, 90 questions.
 curl -LsSf https://astral.sh/uv/install.sh | sh
 
 # Download latest release
-curl -L https://github.com/crook3dfingers/cert-pepper/archive/refs/tags/v0.2.0.tar.gz | tar xz
-cd cert-pepper-0.2.0
+curl -L https://github.com/cert-pepper/cert-pepper/archive/refs/tags/v0.6.0.tar.gz | tar xz
+cd cert-pepper-0.6.0
 
-# git clone https://github.com/crook3dfingers/cert-pepper.git
+# git clone https://github.com/cert-pepper/cert-pepper.git
 # cd cert-pepper
 
 cp .env.example .env   # add ANTHROPIC_API_KEY for CLI AI explanations
@@ -74,7 +76,7 @@ uv run cert-pepper db init
 uv run cert-pepper ingest   # ingests whatever CONTENT_ROOT points to
 ```
 
-For the Security+ example content included in this repo, `CONTENT_ROOT` defaults to `examples/security-plus/`, which loads 160 questions, 74 flashcards, and 138 acronyms.
+For the Security+ example content included in this repo, `CONTENT_ROOT` defaults to `examples/security-plus/`, which loads 228 questions, 135 flashcards, and 262 acronyms.
 
 ---
 
@@ -215,6 +217,5 @@ The predicted score blends your accuracy on seen questions with a 50% prior for 
 
 ## What's Next
 
-- Add more practice questions to underrepresented domains (Domains 3 and 5 have none yet).
 - Run `cert-pepper pregenerate` to pre-cache AI explanations for all wrong-answer combinations (requires `ANTHROPIC_API_KEY`). In Claude Code, explanations are generated on demand — skip `pregenerate`.
 - Use `exam` for a second mock run the morning of the exam.

@@ -4,7 +4,7 @@
 
 If you discover a security vulnerability in CertPepper, report it through GitHub's private vulnerability reporting:
 
-1. Go to the [Security tab](https://github.com/crook3dfingers/cert-pepper/security) of this repository.
+1. Go to the [Security tab](https://github.com/cert-pepper/cert-pepper/security) of this repository.
 2. Click **"Report a vulnerability"**.
 3. Provide a description of the issue, steps to reproduce, and any relevant details.
 

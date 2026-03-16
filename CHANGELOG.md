@@ -2,6 +2,24 @@
 
 All notable changes to CertPepper are documented here.
 
+## [0.6.0] — 2026-03-16
+
+### Added
+- Test for parameterized SQL in pregenerate module
+
+### Changed
+- Tagline moved inside centered div, below logo, rendered in all caps
+- Download links updated to latest release across all docs
+
+### Fixed
+- SQL injection risk in pregenerate domain filter (f-string → parameterized query)
+- DEFAULT_SESSION_SIZE documented as 25, actual default is 10
+- Acronym count 247 → 262 in README and walkthrough
+- Walkthrough download link pointed to v0.2.0 instead of current release
+
+### Security
+- Parameterized all SQL queries — no f-string interpolation of user input
+
 ## [0.5.4] — 2026-03-08
 
 ### Added

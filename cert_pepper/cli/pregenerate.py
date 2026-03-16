@@ -21,7 +21,11 @@ async def run_pregenerate(domain_filter: int | None = None) -> None:
 
     async with get_session() as session:
         # Fetch questions
-        domain_clause = f"AND d.number = {domain_filter}" if domain_filter else ""
+        params: dict[str, int] = {}
+        domain_clause = ""
+        if domain_filter:
+            domain_clause = "AND d.number = :domain_filter"
+            params["domain_filter"] = domain_filter
         result = await session.execute(
             text(f"""
                 SELECT q.id, q.domain_id, d.number, q.number, q.stem,
@@ -31,7 +35,8 @@ async def run_pregenerate(domain_filter: int | None = None) -> None:
                 JOIN domains d ON d.id = q.domain_id
                 WHERE 1=1 {domain_clause}
                 ORDER BY d.number, q.number
-            """)
+            """),
+            params,
         )
         rows = result.fetchall()
         questions = [

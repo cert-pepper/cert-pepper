@@ -9,7 +9,7 @@ MAX=40; i=0
 while [ $i -lt $MAX ]; do
   api_err=$(mktemp)
   result=$(GH_TOKEN="$GITHUB_PERSONAL_ACCESS_TOKEN" gh api \
-    repos/crook3dfingers/cert-pepper/commits/$SHA/check-runs \
+    repos/cert-pepper/cert-pepper/commits/$SHA/check-runs \
     --jq '.check_runs[] | {name,status,conclusion}' 2>"$api_err")
   if [ -s "$api_err" ]; then
     echo "API error (fatal):"; cat "$api_err"; rm -f "$api_err"; exit 1
@@ -22,12 +22,12 @@ while [ $i -lt $MAX ]; do
       if [ -n "$failed" ]; then
         echo "CI FAILED — failed checks:"; echo "$failed"
         GH_TOKEN="$GITHUB_PERSONAL_ACCESS_TOKEN" gh run list \
-          --repo crook3dfingers/cert-pepper --commit "$SHA" \
+          --repo cert-pepper/cert-pepper --commit "$SHA" \
           --json databaseId,conclusion \
           --jq '.[] | select(.conclusion == "failure") | .databaseId' 2>/dev/null \
           | while read run_id; do
               GH_TOKEN="$GITHUB_PERSONAL_ACCESS_TOKEN" gh run view "$run_id" \
-                --repo crook3dfingers/cert-pepper --log-failed 2>&1 | tail -60
+                --repo cert-pepper/cert-pepper --log-failed 2>&1 | tail -60
             done
         exit 1
       fi

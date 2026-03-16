@@ -10,7 +10,7 @@ Thanks for your interest in contributing. This guide covers setup, workflow, and
 ## Dev Setup
 
 ```bash
-git clone https://github.com/crook3dfingers/cert-pepper.git
+git clone https://github.com/cert-pepper/cert-pepper.git
 cd cert-pepper
 cp .env.example .env
 uv sync
