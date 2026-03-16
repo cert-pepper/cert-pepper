@@ -7,7 +7,9 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="License: MIT"></a>
 </div>
 
-**CertPepper** ingests your exam content (questions, flashcards, acronyms) into SQLite and runs an adaptive study loop using **FSRS-4.5 spaced repetition** and **Bayesian Knowledge Tracing**. Wrong answers get AI explanations from Claude. Three MCP servers connect the study engine, content, and analytics to Claude Code.
+CertPepper is an AI-powered adaptive certification prep tool. It learns what you don't know.
+
+CertPepper ingests your exam content (questions, flashcards, acronyms) and runs an adaptive study loop using **FSRS-4.5 spaced repetition** and **Bayesian Knowledge Tracing**. Wrong answers get AI explanations from Claude. Three MCP servers connect the study engine, content, and analytics to Claude Code.
 
 > **No guarantees.** CertPepper is a study tool. Predicted scores and pass probabilities are estimates based on your practice performance — they are not predictions of real exam outcomes. Use at your own risk.
 
