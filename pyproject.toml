@@ -33,6 +33,8 @@ dependencies = [
 [project.urls]
 Homepage = "https://github.com/crook3dfingers/cert-pepper"
 Repository = "https://github.com/crook3dfingers/cert-pepper"
+Changelog = "https://github.com/crook3dfingers/cert-pepper/blob/main/CHANGELOG.md"
+Issues = "https://github.com/crook3dfingers/cert-pepper/issues"
 
 [project.scripts]
 cert-pepper = "cert_pepper.cli.main:app"
