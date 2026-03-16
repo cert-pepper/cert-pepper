@@ -2,6 +2,8 @@
 
 <div align="center">
   <img src="docs/assets/CertPepper_logo.png" alt="CertPepper" width="80%"><br>
+  <em><strong>It learns what you don't know.</strong></em>
+  <br><br>
   <a href="https://github.com/crook3dfingers/cert-pepper/actions/workflows/ci.yml"><img src="https://github.com/crook3dfingers/cert-pepper/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/python-3.12%2B-blue" alt="Python 3.12+"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="License: MIT"></a>
@@ -15,8 +17,6 @@
   <a href="docs/content-format.md">Content Format</a> ·
   <a href="CONTRIBUTING.md">Contributing</a>
 </p>
-
-***It learns what you don't know.***
 
 If you want adaptive exam prep that runs locally, learns your weak spots, and explains your mistakes — this is it.
 
