@@ -1,16 +1,15 @@
-<p align="center">
-  <img src="docs/assets/CertPepper_logo.png" alt="CertPepper" width="400">
-</p>
+# CertPepper — Adaptive Certification Prep
 
+<p align="center">
+  <img src="docs/assets/CertPepper_logo.png" alt="CertPepper" width="80%">
+</p>
 <p align="center">
   <a href="https://github.com/crook3dfingers/cert-pepper/actions/workflows/ci.yml"><img src="https://github.com/crook3dfingers/cert-pepper/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/python-3.12%2B-blue" alt="Python 3.12+"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="License: MIT"></a>
 </p>
 
-AI-powered adaptive certification prep. Learns what you don't know.
-
-CertPepper ingests your exam content (questions, flashcards, acronyms) into SQLite and runs an adaptive study loop using **FSRS-4.5 spaced repetition** and **Bayesian Knowledge Tracing**. Wrong answers get AI explanations from Claude. Three MCP servers connect the study engine, content, and analytics to Claude Code.
+**CertPepper** ingests your exam content (questions, flashcards, acronyms) into SQLite and runs an adaptive study loop using **FSRS-4.5 spaced repetition** and **Bayesian Knowledge Tracing**. Wrong answers get AI explanations from Claude. Three MCP servers connect the study engine, content, and analytics to Claude Code.
 
 > **No guarantees.** CertPepper is a study tool. Predicted scores and pass probabilities are estimates based on your practice performance — they are not predictions of real exam outcomes. Use at your own risk.
 
