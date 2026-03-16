@@ -1,5 +1,9 @@
 # cert-pepper
 
+[![CI](https://github.com/crook3dfingers/cert-pepper/actions/workflows/ci.yml/badge.svg)](https://github.com/crook3dfingers/cert-pepper/actions/workflows/ci.yml)
+[![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+
 AI-powered adaptive certification prep. Learns what you don't know.
 
 cert-pepper ingests your exam content (questions, flashcards, acronyms) into SQLite and runs an adaptive study loop using **FSRS-4.5 spaced repetition** and **Bayesian Knowledge Tracing**. Wrong answers get AI explanations from Claude. Three MCP servers connect the study engine, content, and analytics to Claude Code.
@@ -17,8 +21,8 @@ cert-pepper ingests your exam content (questions, flashcards, acronyms) into SQL
 curl -LsSf https://astral.sh/uv/install.sh | sh
 
 # Option 1: download the latest release
-curl -L https://github.com/crook3dfingers/cert-pepper/archive/refs/tags/v0.2.0.tar.gz | tar xz
-cd cert-pepper-0.2.0
+curl -L https://github.com/crook3dfingers/cert-pepper/archive/refs/tags/v0.5.4.tar.gz | tar xz
+cd cert-pepper-0.5.4
 
 # Option 2: clone (to track future updates)
 # git clone https://github.com/crook3dfingers/cert-pepper.git
@@ -102,6 +106,16 @@ The Security+ content in `examples/security-plus/` is a complete reference imple
 
 ---
 
+## How It Works
+
+cert-pepper combines three techniques to focus your study time where it matters:
+
+- **FSRS-4.5 spaced repetition** schedules reviews at optimal intervals based on your recall history.
+- **Bayesian Knowledge Tracing** estimates mastery per domain and steers new questions toward your weakest areas.
+- **Claude AI explanations** break down wrong answers with domain-specific context (via MCP sampling in Claude Code, or the Anthropic API in CLI mode).
+
+---
+
 ## Repository Layout
 
 ```
@@ -113,7 +127,7 @@ cert-pepper/
 │   ├── ingestion/        — Markdown parsers
 │   ├── ai/               — Anthropic client + explainer
 │   └── db/               — SQLAlchemy async engine + schema
-├── tests/                — pytest suite (313 tests)
+├── tests/                — pytest suite
 ├── examples/
 │   └── security-plus/    — Security+ SY0-701 exam content
 └── docs/
@@ -133,3 +147,13 @@ The `examples/security-plus/` directory contains a complete Security+ SY0-701 ex
 - 138 acronyms
 
 See [docs/walkthrough.md](docs/walkthrough.md) for a step-by-step guide showing how to use cert-pepper to prepare for Security+ in 10 days.
+
+---
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for setup instructions, workflow, and PR guidelines.
+
+## License
+
+[MIT](LICENSE)
