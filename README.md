@@ -1,4 +1,4 @@
-# CertPepper — Adaptive Certification Prep
+# CertPepper
 
 <div align="center">
   <img src="docs/assets/CertPepper_logo.png" alt="CertPepper" width="80%"><br>
@@ -10,101 +10,90 @@
 </div>
 
 <p align="center">
+Adaptive CLI study tool for IT certification exams — FSRS spaced repetition meets AI-powered explanations.
+</p>
+
+<p align="center">
   <a href="#quick-start">Quick Start</a> ·
-  <a href="docs/walkthrough.md">Walkthrough</a> ·
-  <a href="#cli-reference">CLI Reference</a> ·
+  <a href="#why-certpepper">Why CertPepper?</a> ·
+  <a href="#features">Features</a> ·
   <a href="#mcp-integration">MCP Integration</a> ·
   <a href="docs/content-format.md">Content Format</a> ·
   <a href="CONTRIBUTING.md">Contributing</a>
 </p>
 
-If you want adaptive exam prep that runs locally, learns your weak spots, and explains your mistakes — this is it.
-
-CertPepper ingests your exam content (questions, flashcards, acronyms) and runs an adaptive study loop using **FSRS-4.5 spaced repetition** and **Bayesian Knowledge Tracing**. Wrong answers get AI explanations from Claude. Three MCP servers connect the study engine, content, and analytics to Claude Code.
-
-> **No guarantees.** CertPepper is a study tool. Predicted scores and pass probabilities are estimates based on your practice performance — they are not predictions of real exam outcomes. Use at your own risk.
-
-**Worked example:** [Security+ SY0-701: 10-day study plan](docs/walkthrough.md)
-
----
+<p align="center">
+  <img src="docs/assets/demo.gif" alt="CertPepper demo" width="720">
+</p>
 
 ## Quick Start
 
 ```bash
-# Install uv (skip if already installed — https://astral.sh/uv)
-curl -LsSf https://astral.sh/uv/install.sh | sh
-
-# Option 1: download the latest release
-curl -L https://github.com/cert-pepper/cert-pepper/archive/refs/tags/v0.6.0.tar.gz | tar xz
-cd cert-pepper-0.6.0
-
-# Option 2: clone (to track future updates)
-# git clone https://github.com/cert-pepper/cert-pepper.git
-# cd cert-pepper
-
-cp .env.example .env          # add ANTHROPIC_API_KEY for AI explanations in CLI study sessions
+# Clone and install
+git clone https://github.com/cert-pepper/cert-pepper.git && cd cert-pepper
+cp .env.example .env          # add ANTHROPIC_API_KEY for AI explanations
 uv sync
-```
 
-Open the repo in **Claude Code** (see [MCP Integration](#mcp-integration) to enable the servers). Ask Claude to build a question bank for your exam:
-
-> Set up a question bank for the CISSP exam
-
-Claude generates ~90 practice questions per domain and loads them into the database. Then start studying:
-
-```bash
+# Set up a database and start studying
+uv run cert-pepper db init
+uv run cert-pepper ingest     # loads the bundled Security+ content
 uv run cert-pepper study
 ```
 
-To use hand-crafted markdown content instead, see [Adding Your Own Exam](#adding-your-own-exam).
+Or open the repo in **Claude Code** and ask it to generate a question bank for any exam:
 
----
+> Set up a question bank for the CISSP exam
 
-## CLI Reference
+See [MCP Integration](#mcp-integration) to enable the servers.
 
-| Command | Description |
+## Why CertPepper?
+
+Most study tools — Anki, Quizlet, flashcard apps — treat every question the same. CertPepper adapts:
+
+- **FSRS-4.5 spaced repetition** schedules reviews at optimal intervals based on your recall history — the same core algorithm behind Anki, tuned for exam prep.
+- **Bayesian Knowledge Tracing** estimates mastery per domain and steers new questions toward your weakest areas, weighted by how much each domain counts on the real exam.
+- **AI explanations** break down wrong answers with domain-specific context via Claude (MCP sampling in Claude Code, or the Anthropic API in CLI mode).
+- **Domain-weighted scoring** predicts your exam score using actual exam weights, with a conservative prior for unseen material.
+- **MCP integration** — study inside Claude Code with three servers for content, study sessions, and analytics.
+
+## Features
+
+| Command | What it does |
 |---------|-------------|
-| `cert-pepper db init` | Create the SQLite schema |
-| `cert-pepper ingest [--dry-run]` | Parse markdown content into the DB |
-| `cert-pepper study [--domain N] [--count N] [--new-questions]` | Adaptive study session |
-| `cert-pepper exam` | 90-question timed mock exam |
-| `cert-pepper progress` | Dashboard: accuracy, predicted score, weak areas |
+| `cert-pepper study` | Adaptive study session — picks questions based on your weak spots |
+| `cert-pepper study --domain 4 --count 15` | Target a specific domain |
+| `cert-pepper study --new-questions` | Focus on unseen material |
+| `cert-pepper exam` | 90-question timed mock exam with countdown |
+| `cert-pepper progress` | Dashboard: domain accuracy, predicted score, pass probability, study streak |
+| `cert-pepper goal set --exam-date 2026-03-09` | Set exam date, get a paced study calendar |
 | `cert-pepper pregenerate` | Batch-generate AI explanations (requires API key) |
-| `cert-pepper goal set --exam-date YYYY-MM-DD [--hours N]` | Set exam date and study hour target |
-| `cert-pepper goal show` | Show schedule pace and study calendar |
+| `cert-pepper db init` | Create/reset the SQLite database |
+| `cert-pepper ingest` | Parse markdown content into the DB |
+| `cert-pepper upgrade` | Apply schema migrations and refresh content |
 
----
+> **No guarantees.** Predicted scores and pass probabilities are estimates based on practice performance — not predictions of real exam outcomes.
 
 ## MCP Integration
 
-Three STDIO MCP servers are registered in `.mcp.json`. After `uv sync` they are available as venv binaries:
+Three STDIO MCP servers are registered in `.mcp.json`:
 
-| Server | Binary | Purpose |
-|--------|--------|---------|
-| `cert-pepper-study` | `.venv/bin/cert-pepper-study-mcp` | Start sessions, submit answers, get due cards |
-| `cert-pepper-content` | `.venv/bin/cert-pepper-content-mcp` | Search questions, get explanations, look up acronyms |
-| `cert-pepper-analytics` | `.venv/bin/cert-pepper-analytics-mcp` | Predict score, find weak areas, study recommendations |
+| Server | Purpose |
+|--------|---------|
+| `cert-pepper-study` | Start sessions, submit answers, get due cards |
+| `cert-pepper-content` | Search questions, get explanations, look up acronyms |
+| `cert-pepper-analytics` | Predict score, find weak areas, study recommendations |
 
-Enable them in Claude Code by adding `enableAllProjectMcpServers: true` to `.claude/settings.local.json`, then open a new session in this repo.
+Enable them in Claude Code by adding `enableAllProjectMcpServers: true` to `.claude/settings.local.json`.
 
-In Claude Code, explanations are generated via MCP sampling — no `ANTHROPIC_API_KEY` needed.
-
-Test a server directly:
-```bash
-echo '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | .venv/bin/cert-pepper-study-mcp
-```
-
----
+In Claude Code, explanations use MCP sampling — no `ANTHROPIC_API_KEY` needed.
 
 ## Adding Your Own Exam
 
-1. Create a content directory with your exam material in the CertPepper markdown format (see [docs/content-format.md](docs/content-format.md)).
+1. Create a content directory in CertPepper's [markdown format](docs/content-format.md).
 2. Set `CONTENT_ROOT=/path/to/your/content` in `.env`.
 3. Run `cert-pepper db init` and `cert-pepper ingest`.
 
-The Security+ content in `examples/security-plus/` is a complete reference implementation.
-
----
+The `examples/security-plus/` directory is a complete reference implementation with 228 questions, 135 flashcards, and 262 acronyms.
 
 ## Configuration
 
@@ -117,18 +106,6 @@ The Security+ content in `examples/security-plus/` is a complete reference imple
 | `SONNET_MODEL` | `claude-sonnet-4-6` | Model for MCP sampling |
 | `DEFAULT_SESSION_SIZE` | `10` | Questions per study session |
 | `MASTERY_THRESHOLD` | `0.85` | BKT mastery cutoff |
-
----
-
-## How It Works
-
-CertPepper combines three techniques to focus your study time where it matters:
-
-- **FSRS-4.5 spaced repetition** schedules reviews at optimal intervals based on your recall history.
-- **Bayesian Knowledge Tracing** estimates mastery per domain and steers new questions toward your weakest areas.
-- **Claude AI explanations** break down wrong answers with domain-specific context (via MCP sampling in Claude Code, or the Anthropic API in CLI mode).
-
----
 
 ## Repository Layout
 
@@ -149,8 +126,6 @@ cert-pepper/
     └── content-format.md — Format spec for your own exam content
 ```
 
----
-
 ## Worked Example
 
 The `examples/security-plus/` directory contains a complete Security+ SY0-701 exam prep set:
@@ -160,9 +135,7 @@ The `examples/security-plus/` directory contains a complete Security+ SY0-701 ex
 - 228 practice questions across all 5 domains
 - 262 acronyms
 
-See [docs/walkthrough.md](docs/walkthrough.md) for a step-by-step guide showing how to use CertPepper to prepare for Security+ in 10 days.
-
----
+See [docs/walkthrough.md](docs/walkthrough.md) for a step-by-step guide to preparing for Security+ in 10 days.
 
 ## Contributing
 

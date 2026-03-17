@@ -193,6 +193,9 @@ async def run_exam(
 
             questions[q_id] = q
 
+            if i > 1:
+                console.clear()
+
             domain_colors = {1: "blue", 2: "red", 3: "green", 4: "yellow", 5: "magenta"}
             color = domain_colors.get(q.domain_number, "white")
 
