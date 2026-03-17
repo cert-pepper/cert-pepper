@@ -2,6 +2,18 @@
 
 All notable changes to CertPepper are documented here.
 
+## [Unreleased]
+
+### Added
+- `cert_pepper/__main__.py` — enables `python -m cert_pepper` invocation
+- `cert_pepper/py.typed` — PEP 561 typed package marker
+- VHS demo tape at `docs/assets/demo.tape` for generating terminal demo GIFs
+- GitHub Discussions enabled for community Q&A
+
+### Changed
+- README restructured for impact-first ordering: positioning, demo GIF, quick start, "Why CertPepper?" differentiators, consolidated feature table
+- GitHub repo description and topics updated for discoverability
+
 ## [0.6.0] — 2026-03-16
 
 ### Added
