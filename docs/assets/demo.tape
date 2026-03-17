@@ -25,30 +25,30 @@ Type "uv run cert-pepper study --count 3 --no-ai"
 Enter
 Sleep 3s
 
-# Answer Q1
+# Answer Q1 (correct)
 Type "B"
 Enter
-Sleep 1.5s
+Sleep 3.5s
 
 # FSRS rating
 Type "3"
 Enter
 Sleep 2s
 
-# Answer Q2
+# Answer Q2 (incorrect — shows the ✗ path)
+Type "D"
+Enter
+Sleep 4s
+
+# FSRS rating
+Type "1"
+Enter
+Sleep 2s
+
+# Answer Q3 (correct)
 Type "A"
 Enter
-Sleep 1.5s
-
-# FSRS rating
-Type "3"
-Enter
-Sleep 2s
-
-# Answer Q3
-Type "C"
-Enter
-Sleep 1.5s
+Sleep 3.5s
 
 # FSRS rating
 Type "3"
@@ -58,4 +58,4 @@ Sleep 3s
 # --- Progress dashboard ---
 Type "uv run cert-pepper progress"
 Enter
-Sleep 5s
+Sleep 7s

@@ -296,6 +296,9 @@ async def run_study_session(
             if q is None:
                 continue
 
+            if i > 0:
+                console.clear()
+
             display_question(q, i + 1, count)
 
             # Get answer
