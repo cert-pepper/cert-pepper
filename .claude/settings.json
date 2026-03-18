@@ -10,6 +10,16 @@
           }
         ]
       }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash /home/ubuntu/github/cert-pepper/.claude/hooks/doc-editor-continue.sh"
+          }
+        ]
+      }
     ]
   }
 }

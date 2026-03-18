@@ -17,7 +17,7 @@ cert-pepper/
 ├── examples/
 │   └── security-plus/    — Security+ SY0-701 exam content (read-only input)
 ├── docs/
-│   ├── walkthrough.md    — 10-day Security+ study guide
+│   ├── security-plus-in-10-days.md — 10-day Security+ study guide
 │   └── content-format.md — Format spec for exam content
 ├── pyproject.toml
 ├── .env                  — Local config (not committed)
@@ -170,9 +170,24 @@ Full format documentation: [docs/content-format.md](docs/content-format.md)
 
 ## Skills (`.claude/skills/`)
 
-Reusable prompts that keep main-context token usage low. To invoke a skill: read the skill file — no substitution needed — pass the skill file content directly as the `prompt` to a background Haiku Agent call (`model=haiku`, `run_in_background=true`). The task completion notification signals pass/fail.
+Reusable prompts that keep main-context token usage low. To invoke a skill: read the skill file — no substitution needed — pass the skill file content directly as the `prompt` to an Agent call. Use the model and execution mode from the table below.
 
-| Skill file | Model | When to use |
-|---|---|---|
-| `ci-watcher.md` | Haiku, background | After every `git push` — **mandatory** |
-| `doc-editor/SKILL.md` | (inherits) | Before every `Edit` or `Write` to a `.md` file — **mandatory** |
+| Skill file | Model | Mode | When to use |
+|---|---|---|---|
+| `ci-watcher.md` | Haiku, background | `run_in_background=true` | After every `git push` — **mandatory** |
+| `doc-editor/SKILL.md` | Haiku, foreground | `run_in_background=false` | Before every `Edit` or `Write` to a `.md` file — **mandatory** |
+
+**Background skills** (ci-watcher): fire-and-forget — the task notification signals pass/fail. Continue working after launch.
+
+**Foreground skills** (doc-editor): the agent runs inline. **CRITICAL: The skill output is NOT your final response.** After receiving the cleaned prose, you MUST immediately proceed to Edit or Write the file. Never present the skill's output to the user as your response — it is an intermediate result.
+
+### Doc-editor workflow (mandatory sequence)
+
+When editing any `.md` file, follow this exact sequence **without stopping between steps**:
+
+1. Read the file
+2. Invoke doc-editor skill with the draft prose
+3. **Immediately** use the cleaned prose from step 2 in an Edit or Write call — do NOT end your turn after step 2
+4. Confirm the edit to the user
+
+Steps 2 and 3 must happen in the **same response turn**. If you find yourself about to respond to the user after step 2 without having done step 3, you have a bug — continue to step 3.

@@ -1,10 +1,10 @@
-# Preparing for Security+ SY0-701: A 10-Day Sprint
+# Security+ in 10 Days
 
 The CertPepper author used this content and schedule to pass Security+ on the first attempt.
 
 CompTIA recommends 40 hours of study for Security+ — 4 hours per day for 10 days. This guide is for candidates with an IT or security background who want a compressed schedule. If you're starting fresh, extend to 3–4 weeks.
 
-CertPepper does not guarantee exam results — outcomes depend on your prior knowledge, study effort, and exam conditions. This walkthrough assumes you're using **Claude Code with MCP enabled** — that's the recommended path. A manual CLI alternative is included in each section.
+CertPepper does not guarantee exam results — outcomes depend on your prior knowledge, study effort, and exam conditions. This sprint uses Claude Code to set up the question bank and generate explanations. The CLI handles studying and practice exams. This is the recommended path.
 
 ---
 
