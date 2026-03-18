@@ -23,6 +23,10 @@ Adaptive CLI study tool for IT certification exams — FSRS spaced repetition me
 </p>
 
 <p align="center">
+  <strong><a href="docs/security-plus-in-10-days.md">Security+ in 10 Days →</a></strong>
+</p>
+
+<p align="center">
   <img src="docs/assets/demo.gif" alt="CertPepper demo" width="720">
 </p>
 
@@ -122,7 +126,7 @@ cert-pepper/
 ├── examples/
 │   └── security-plus/    — Security+ SY0-701 exam content
 └── docs/
-    ├── walkthrough.md    — 10-day Security+ study guide
+    ├── security-plus-in-10-days.md — 10-day Security+ study guide
     └── content-format.md — Format spec for your own exam content
 ```
 
@@ -135,7 +139,7 @@ The `examples/security-plus/` directory contains a complete Security+ SY0-701 ex
 - 228 practice questions across all 5 domains
 - 262 acronyms
 
-See [docs/walkthrough.md](docs/walkthrough.md) for a step-by-step guide to preparing for Security+ in 10 days.
+See [Security+ in 10 Days](docs/security-plus-in-10-days.md) for a step-by-step guide.
 
 ## Contributing
 

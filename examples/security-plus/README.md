@@ -9,6 +9,6 @@ This directory contains a complete Security+ SY0-701 exam prep set, used as the 
 - `acronyms.md` — 247 acronyms
 - `study-plan.md` — 10-day study schedule
 
-**Walkthrough:** See [docs/walkthrough.md](../../docs/walkthrough.md) for a step-by-step guide using this content with cert-pepper over 10 days.
+**Walkthrough:** See [Security+ in 10 Days](../../docs/security-plus-in-10-days.md) for a step-by-step guide using this content with CertPepper.
 
 **Format reference:** See [docs/content-format.md](../../docs/content-format.md) to understand the markdown format and add your own exam content.
