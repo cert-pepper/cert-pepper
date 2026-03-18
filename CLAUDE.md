@@ -17,7 +17,7 @@ cert-pepper/
 ├── examples/
 │   └── security-plus/    — Security+ SY0-701 exam content (read-only input)
 ├── docs/
-│   ├── walkthrough.md    — 10-day Security+ study guide
+│   ├── security-plus-in-10-days.md — 10-day Security+ study guide
 │   └── content-format.md — Format spec for exam content
 ├── pyproject.toml
 ├── .env                  — Local config (not committed)
@@ -170,9 +170,13 @@ Full format documentation: [docs/content-format.md](docs/content-format.md)
 
 ## Skills (`.claude/skills/`)
 
-Reusable prompts that keep main-context token usage low. To invoke a skill: read the skill file — no substitution needed — pass the skill file content directly as the `prompt` to a background Haiku Agent call (`model=haiku`, `run_in_background=true`). The task completion notification signals pass/fail.
+Reusable prompts that keep main-context token usage low. To invoke a skill: read the skill file — no substitution needed — pass the skill file content directly as the `prompt` to an Agent call. Use the model and execution mode from the table below.
 
-| Skill file | Model | When to use |
-|---|---|---|
-| `ci-watcher.md` | Haiku, background | After every `git push` — **mandatory** |
-| `doc-editor/SKILL.md` | (inherits) | Before every `Edit` or `Write` to a `.md` file — **mandatory** |
+| Skill file | Model | Mode | When to use |
+|---|---|---|---|
+| `ci-watcher.md` | Haiku, background | `run_in_background=true` | After every `git push` — **mandatory** |
+| `doc-editor/SKILL.md` | Haiku, foreground | `run_in_background=false` | Before every `Edit` or `Write` to a `.md` file — **mandatory** |
+
+**Background skills** (ci-watcher): fire-and-forget — the task notification signals pass/fail. Continue working after launch.
+
+**Foreground skills** (doc-editor): the agent runs inline. Wait for the result, use the cleaned output, then continue with the next step in your plan.
