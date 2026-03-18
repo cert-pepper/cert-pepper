@@ -179,4 +179,15 @@ Reusable prompts that keep main-context token usage low. To invoke a skill: read
 
 **Background skills** (ci-watcher): fire-and-forget — the task notification signals pass/fail. Continue working after launch.
 
-**Foreground skills** (doc-editor): the agent runs inline. Wait for the result, use the cleaned output, then continue with the next step in your plan.
+**Foreground skills** (doc-editor): the agent runs inline. **CRITICAL: The skill output is NOT your final response.** After receiving the cleaned prose, you MUST immediately proceed to Edit or Write the file. Never present the skill's output to the user as your response — it is an intermediate result.
+
+### Doc-editor workflow (mandatory sequence)
+
+When editing any `.md` file, follow this exact sequence **without stopping between steps**:
+
+1. Read the file
+2. Invoke doc-editor skill with the draft prose
+3. **Immediately** use the cleaned prose from step 2 in an Edit or Write call — do NOT end your turn after step 2
+4. Confirm the edit to the user
+
+Steps 2 and 3 must happen in the **same response turn**. If you find yourself about to respond to the user after step 2 without having done step 3, you have a bug — continue to step 3.
