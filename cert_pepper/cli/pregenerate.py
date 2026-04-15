@@ -13,7 +13,7 @@ from cert_pepper.models.content import Question
 console = Console()
 
 
-async def run_pregenerate(domain_filter: int | None = None) -> None:
+async def run_pregenerate(domain_filter: int | None = None, exam_code: str | None = None) -> None:
     """Pre-generate AI explanations for all questions."""
 
     console.print("[cyan]Pre-generating AI explanations...[/cyan]")
@@ -87,7 +87,8 @@ async def run_pregenerate(domain_filter: int | None = None) -> None:
 
                     try:
                         from cert_pepper.ai.explainer import get_explanation
-                        await get_explanation(session, q, wrong)
+                        resolved_exam_code = exam_code or "SY0-701"
+                        await get_explanation(session, q, wrong, exam_code=resolved_exam_code)
                     except Exception as e:
                         console.print(f"\n[red]Error on Q{q.id}/{wrong}: {e}[/red]")
 

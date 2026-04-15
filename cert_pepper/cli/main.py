@@ -245,12 +245,15 @@ def pregenerate(
     domain: int | None = typer.Option(
         None, "--domain", "-d", help="Only pregenerate for this domain."
     ),
+    exam: str | None = typer.Option(
+        None, "--exam", "-e", help="Exam code. Auto-detects when only one exam is present."
+    ),
 ) -> None:
     """Batch pre-generate AI explanations for all questions."""
     import asyncio
 
     from cert_pepper.cli.pregenerate import run_pregenerate
-    asyncio.run(run_pregenerate(domain_filter=domain))
+    asyncio.run(run_pregenerate(domain_filter=domain, exam_code=exam))
 
 
 if __name__ == "__main__":

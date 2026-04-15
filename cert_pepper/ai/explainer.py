@@ -22,6 +22,7 @@ async def get_explanation(
     question: Question,
     selected_answer: str,
     explanation_type: str = "full",
+    exam_code: str = "SY0-701",
 ) -> str:
     """
     Get explanation for a question attempt.
@@ -41,7 +42,7 @@ async def get_explanation(
         return cached
 
     # Generate via API
-    system = get_explainer_system(question.domain_number)
+    system = get_explainer_system(question.domain_number, exam_code=exam_code)
     user = _build_user_message(question, selected_answer)
     model = settings.sonnet_model
 
@@ -73,6 +74,7 @@ async def pregenerate_all(
     session: AsyncSession,
     questions: list[Question],
     progress_callback: None = None,
+    exam_code: str = "SY0-701",
 ) -> dict[str, int]:
     """
     Pre-generate explanations for all questions.
@@ -93,7 +95,7 @@ async def pregenerate_all(
                 continue
 
             try:
-                system = get_explainer_system(q.domain_number)
+                system = get_explainer_system(q.domain_number, exam_code=exam_code)
                 user = _build_user_message(q, wrong)
                 settings = get_settings()
                 content, tokens, cache_hit = generate_explanation(
