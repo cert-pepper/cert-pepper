@@ -116,3 +116,55 @@ class TestFlashcardSession:
 
         assert len(printed) == 1
         assert "No flashcards" in str(printed[0])
+
+    async def test_hint_shown_when_h_pressed(self, db):
+        """Pressing H on a card with a tip re-renders the panel with the tip visible."""
+        from cert_pepper.cli.flashcards import run_flashcard_session
+
+        async with get_session() as session:
+            cert_id = await seed_certification(session, code="FC06")
+            await seed_domains_for_cert(session, cert_id)
+            await seed_flashcard(
+                session,
+                front="Transformer",
+                back="Attention-based neural architecture",
+                tip="The architecture behind GPT, BERT, and friends",
+                cert_id=cert_id,
+            )
+
+        printed = []
+        # "h" triggers hint render, "" advances past definition, last card skips answer-side _getkey
+        with patch("cert_pepper.cli.flashcards._getkey", side_effect=["h", ""]):
+            with patch("cert_pepper.cli.flashcards.console.print",
+                       side_effect=printed.append):
+                await run_flashcard_session(exam_code="FC06")
+
+        # question (no tip) + question (with tip) + answer + completion = 4
+        assert len(printed) == 4
+        assert "The architecture behind GPT, BERT, and friends" in str(printed[1].renderable)
+        assert "The architecture behind GPT, BERT, and friends" not in str(printed[0].renderable)
+
+    async def test_no_hint_prompt_when_tip_absent(self, db):
+        """Cards without a tip show no hint prompt in the definition panel."""
+        from cert_pepper.cli.flashcards import run_flashcard_session
+
+        async with get_session() as session:
+            cert_id = await seed_certification(session, code="FC07")
+            await seed_domains_for_cert(session, cert_id)
+            await seed_flashcard(
+                session,
+                front="CIA Triad",
+                back="Confidentiality, Integrity, Availability",
+                tip="",
+                cert_id=cert_id,
+            )
+
+        printed = []
+        with patch("cert_pepper.cli.flashcards._getkey", return_value=""):
+            with patch("cert_pepper.cli.flashcards.console.print",
+                       side_effect=printed.append):
+                await run_flashcard_session(exam_code="FC07")
+
+        first_panel_text = str(printed[0].renderable)
+        assert "H for hint" not in first_panel_text
+        assert "Enter to reveal" in first_panel_text
