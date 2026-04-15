@@ -83,8 +83,6 @@ async def run_flashcard_session(
         # — question side (definition) —
         question_content = Text()
         question_content.append(back)
-        if tip:
-            question_content.append(f"\n\n💡 {tip}")
         question_content.append("\n\n")
         question_content.append("[dim]Space to reveal  ·  Q to quit[/dim]")
 
@@ -97,8 +95,6 @@ async def run_flashcard_session(
         # — answer side (term) —
         full_content = Text()
         full_content.append(back)
-        if tip:
-            full_content.append(f"\n\n💡 {tip}")
         full_content.append("\n\n")
         full_content.append("─" * 50)
         full_content.append("\n\n")
