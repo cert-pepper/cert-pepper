@@ -12,8 +12,9 @@ Tests for pure functions do not need it.
 
 from __future__ import annotations
 
-import pytest
 from pathlib import Path
+
+import pytest
 from sqlalchemy import text
 
 import cert_pepper.db.connection as _conn_module

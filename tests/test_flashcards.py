@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
-import pytest
-
 from tests.conftest import (
     seed_certification,
     seed_domains_for_cert,
@@ -17,6 +15,7 @@ class TestFlashcardSession:
     async def test_run_flashcard_session_shows_all_cards(self, db):
         """Three cards → three panel prints plus one completion print."""
         from cert_pepper.cli.flashcards import run_flashcard_session
+
         from cert_pepper.db.connection import get_session
 
         async with get_session() as session:
@@ -38,6 +37,7 @@ class TestFlashcardSession:
     async def test_run_flashcard_session_domain_filter(self, db):
         """Only cards from the requested domain are shown."""
         from cert_pepper.cli.flashcards import run_flashcard_session
+
         from cert_pepper.db.connection import get_session
 
         async with get_session() as session:
@@ -56,10 +56,14 @@ class TestFlashcardSession:
 
         # 1 panel + 1 completion
         assert len(printed) == 2
+        panel_text = str(printed[0].renderable)
+        assert "D1 Term" in panel_text
+        assert "D2 Term" not in panel_text
 
     async def test_run_flashcard_session_category_filter(self, db):
         """Only cards from the requested category are shown."""
         from cert_pepper.cli.flashcards import run_flashcard_session
+
         from cert_pepper.db.connection import get_session
 
         async with get_session() as session:
@@ -78,10 +82,14 @@ class TestFlashcardSession:
 
         # 1 panel + 1 completion
         assert len(printed) == 2
+        panel_text = str(printed[0].renderable)
+        assert "Cat A Term" in panel_text
+        assert "Cat B Term" not in panel_text
 
     async def test_run_flashcard_session_count_cap(self, db):
         """count=2 with 5 cards shows only 2 panels."""
         from cert_pepper.cli.flashcards import run_flashcard_session
+
         from cert_pepper.db.connection import get_session
 
         async with get_session() as session:
@@ -103,6 +111,7 @@ class TestFlashcardSession:
     async def test_run_flashcard_session_no_cards_exits_cleanly(self, db):
         """No flashcards for the cert → single yellow warning, no crash."""
         from cert_pepper.cli.flashcards import run_flashcard_session
+
         from cert_pepper.db.connection import get_session
 
         async with get_session() as session:
