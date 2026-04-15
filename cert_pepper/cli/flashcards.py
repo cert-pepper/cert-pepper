@@ -60,7 +60,7 @@ async def run_flashcard_session(
         cards = cards[:count]
 
     total = len(cards)
-    shown = 0
+    i = 0
 
     for i, card in enumerate(cards, 1):
         _card_id, front, back, tip, cat, domain_num, _domain_name = card
@@ -82,11 +82,10 @@ async def run_flashcard_session(
         header = "  ·  ".join(header_parts)
 
         console.print(Panel(content, title=header, border_style="cyan"))
-        shown = i
 
         if i < total:
             response = Prompt.ask("[Enter] Next  [Q] Quit", default="")
             if response.strip().lower() == "q":
                 break
 
-    console.print(f"\n[green]✓ Done. Reviewed {shown}/{total} cards.[/green]")
+    console.print(f"\n[green]✓ Done. Reviewed {i}/{total} cards.[/green]")
