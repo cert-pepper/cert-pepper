@@ -74,9 +74,11 @@
 
 **Unstructured data** → Data with no predefined format (e.g., images, audio, raw text, binary files). | No schema, no table — free-form content
 
+**Data cleansing** → Removing or correcting inaccurate, duplicate, and malformed records from a dataset before training to improve data quality. | Clean before you cook — garbage in, garbage out
+
 ## AI Lifecycle Security (Objective 1.3)
 
-**AI lifecycle** → The end-to-end process of building and operating an AI system: business use case → data collection → data preparation → model development → evaluation → deployment → monitoring → iteration. | The AI development assembly line
+**AI lifecycle** → The end-to-end process of building and operating an AI system: business use case → data collection → data preparation → model development and selection → model training → model evaluation → deployment → monitoring → iteration. | The AI development assembly line
 
 **Human-in-the-loop** → A design requiring human review and approval before an AI system takes consequential actions. | AI proposes; human approves
 
@@ -95,6 +97,8 @@
 **MIT AI Risk Repository** → MIT research database cataloging AI risks across ethical, technical, and societal dimensions. | Academic risk catalog for AI
 
 **CVE AI Working Group** → An initiative extending the CVE program to enumerate and track AI-specific vulnerabilities. | CVE program adapted for AI flaws
+
+**STRIDE** → A threat-modeling framework that categorizes threats across six dimensions: Spoofing, Tampering, Repudiation, Information Disclosure, Denial of Service, and Elevation of Privilege. | Six threat buckets — one per letter of STRIDE
 
 ## AI Attacks (Objective 2.6)
 
@@ -156,6 +160,26 @@
 
 **AI cost monitoring** → Tracking token usage, compute costs, and API call volumes as both a financial and security control signal. | High spend = possible abuse or model DoS
 
+**Model access control** → Governing which users, services, or applications are authorized to invoke an AI model's API endpoint. | The bouncer for the model itself — separate from the data
+
+**Data access control** → Segmenting access to training and inference data based on sensitivity classification and role. | Only authorized roles see sensitive training sets
+
+**Agent access control** → Limiting the actions an AI agent is permitted to take on external systems, applying least privilege to agentic workflows. | What the AI is allowed to do — not just access
+
+**API access control** → Managing the lifecycle of API credentials — scoped, short-lived, rotated keys — that govern access to AI endpoints. | Long-lived shared keys = one breach from full access
+
+**Prompt monitoring** → Logging and inspecting all user queries submitted to an AI system to detect injection attempts, policy violations, and anomalous input patterns. | Security camera on the AI's input
+
+**Log protection** → Preventing unauthorized modification or deletion of AI system audit logs — typically via write-once storage, append-only streams, or cryptographic integrity checks. | Logs are only useful if they cannot be erased
+
+**Hallucination auditing** → Systematically sampling model outputs and verifying factual claims to track the rate at which the model generates fabricated content over time. | Quality control for the model's truthfulness — tracks the lie rate
+
+**Bias and fairness auditing** → Statistical testing of model output distributions across demographic groups to detect discriminatory or disparate-impact patterns. | Does the model treat everyone the same?
+
+**Access auditing** → Recording and reviewing who accessed the AI model, when, and via which endpoint to detect unauthorized access or privilege escalation. | The who/when/where log for model access
+
+**Rate monitoring** → Detecting anomalously high query volumes from a single source — a pattern consistent with model extraction, DoS attempts, or automated abuse. | Volume spike from one caller = likely abuse signal
+
 ## Data Protection Controls (Objective 2.4)
 
 **Anonymization** → Irreversibly removing or replacing personal identifiers from data so individuals cannot be re-identified. | One-way street — identity cannot be recovered
@@ -174,6 +198,8 @@
 
 **Encryption in use** → Protecting data while it is actively being processed (e.g., via trusted execution environments). | A secure room where data can be worked on without being seen
 
+**Data classification labeling** → Assigning sensitivity tiers (e.g., Public, Internal, Confidential, Restricted) to data records to govern access controls, encryption requirements, and handling rules. | Sensitivity label on every record — drives all downstream protections
+
 ## AI-assisted Security (Objective 3.1–3.3)
 
 **MCP server** → A server that exposes tools and resources to AI agents via the Model Context Protocol, enabling agentic workflows. | The AI's API to the outside world
@@ -191,6 +217,26 @@
 **Misinformation** → False content spread without malicious intent, often due to the sharer not knowing it is incorrect. | Accidental lies — no intent to deceive
 
 **Impersonation** → Using AI-generated content to convincingly portray a specific real person in order to deceive targets. | The deepfake with a victim in mind
+
+**Anomaly detection** → Establishing a baseline of normal behavior and alerting when observed activity deviates significantly from that baseline — no signature required. | Learns what normal looks like; everything else is suspicious
+
+**Fraud detection** → Real-time scoring of transactions or events against behavioral patterns and contextual signals to block fraudulent activity before it completes. | Anomaly detection applied to financial harm — milliseconds matter
+
+**AI-assisted threat modeling** → Analyzing architecture artifacts, data flow diagrams, and component inventories to enumerate threats and suggest mitigations. | Architecture diagram in, prioritized threat list out
+
+**Automated penetration testing** → AI-driven tools that map an application's attack surface, generate exploit payloads, and attempt to chain vulnerabilities into multi-step attack paths. | Red-team automation — AI probes while the team sleeps
+
+**Log summarization** → Condensing high-volume SIEM alert output into plain-language summaries to reduce analyst cognitive load during triage. | Turns 50,000 alerts into five readable paragraphs
+
+**AI model regression testing** → Validating that a retrained or updated ML model maintains acceptable performance metrics on a standardized benchmark before promotion to production. | Did the update break the model? Run this to find out
+
+**Low-code/no-code security automation** → Visual workflow platforms that allow security practitioners without programming skills to build automated incident response runbooks. | Drag-and-drop incident response — no scripting required
+
+**Document synthesis and summarization** → Distilling large volumes of threat intelligence documents, advisories, and reports into concise, structured briefings. | AI reads the pile of advisories; you review the brief
+
+**AI-generated malware obfuscation** → Automatically mutating malicious code structure, variable names, and encoding to defeat signature-based detection while preserving execution behavior. | Polymorphic malware at AI scale — each variant looks different
+
+**AI-assisted reconnaissance** → Aggregating and correlating OSINT from public sources — LinkedIn, GitHub, job postings — to map an organization's attack surface. | Target research at machine speed
 
 ## Governance and Compliance (Objective 4.1–4.3)
 
@@ -229,3 +275,15 @@
 **Reputational loss** → Organizational damage to trust and brand resulting from a public AI failure or misuse. | When the AI embarrasses the company in public
 
 **Accidental data leakage** → Unintended exposure of sensitive information through AI model outputs or system misconfigurations. | The model revealing secrets it learned in training
+
+**AI acceptable-use policy** → A governance document defining permitted AI tools, prohibited use cases, data handling requirements, and user responsibilities within an organization. | The rulebook for who can use what AI and how
+
+**IP-related risk** → Risk arising when AI training uses copyrighted content without proper licensing or authorization, exposing the organization to intellectual property infringement claims. | Training on scraped content without licensing = copyright liability
+
+**Autonomous system risk** → Risk that an AI system takes actions without required human authorization, operating beyond its intended operational scope. | The AI that keeps acting when it should have stopped
+
+**Unintended system interactions** → Risk that an AI system's outputs feed back into connected systems in unanticipated ways, causing emergent or amplified downstream effects. | AI output becomes another system's input — feedback loops emerge
+
+**Private vs. public model deployment** → The trade-off between deploying AI on-premises (data stays inside organizational boundaries) versus using an external API (broader capability but data leaves organizational control). | Who controls the data: you or the vendor?
+
+**Third-party compliance evaluation** → Assessing whether external vendors and partners who build or operate AI systems on an organization's behalf meet required governance, security, and regulatory standards. | Vendor audit for AI — does their system meet your obligations?

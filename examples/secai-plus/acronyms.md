@@ -30,6 +30,7 @@ The following acronyms appear on the CY0-001 V1 exam (official list from CompTIA
 | ISO | International Organization for Standardization |
 | OWASP | Open Worldwide Application Security Project |
 | RMF | Risk Management Framework |
+| STRIDE | Spoofing, Tampering, Repudiation, Information Disclosure, Denial of Service, Elevation of Privilege |
 
 ## Governance and Compliance
 
@@ -37,6 +38,7 @@ The following acronyms appear on the CY0-001 V1 exam (official list from CompTIA
 |---------|-----------|
 | EU | European Union |
 | GDPR | General Data Protection Regulation |
+| HIPAA | Health Insurance Portability and Accountability Act |
 | GRC | Governance, Risk, and Compliance |
 | IaC | Infrastructure as Code |
 | IP | Intellectual Property |
@@ -55,6 +57,7 @@ The following acronyms appear on the CY0-001 V1 exam (official list from CompTIA
 | CI/CD | Continuous Integration and Continuous Deployment |
 | CLI | Command-Line Interface |
 | DAST | Dynamic Application Security Testing |
+| SAST | Static Application Security Testing |
 | DDoS | Distributed Denial of Service |
 | DoS | Denial of Service |
 | EDR | Endpoint Detection and Response |
