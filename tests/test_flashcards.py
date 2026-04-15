@@ -54,8 +54,8 @@ class TestFlashcardSession:
         # 1 card × 2 panels + 1 completion
         assert len(printed) == 3
         panel_text = str(printed[0].renderable)
-        assert "D1 Term" in panel_text
-        assert "D2 Term" not in panel_text
+        assert "D1 Def" in panel_text
+        assert "D2 Def" not in panel_text
 
     async def test_run_flashcard_session_category_filter(self, db):
         """Only cards from the requested category are shown."""
@@ -78,8 +78,8 @@ class TestFlashcardSession:
         # 1 card × 2 panels + 1 completion
         assert len(printed) == 3
         panel_text = str(printed[0].renderable)
-        assert "Cat A Term" in panel_text
-        assert "Cat B Term" not in panel_text
+        assert "Cat A Def" in panel_text
+        assert "Cat B Def" not in panel_text
 
     async def test_run_flashcard_session_count_cap(self, db):
         """count=2 with 5 cards shows only 2 cards."""

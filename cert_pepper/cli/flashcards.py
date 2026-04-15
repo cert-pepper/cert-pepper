@@ -80,27 +80,29 @@ async def run_flashcard_session(
             header_parts.append(cat)
         header = "  ·  ".join(header_parts)
 
-        # — front only —
-        front_content = Text()
-        front_content.append(front, style="bold")
-        front_content.append("\n\n")
-        front_content.append("[dim]Space to reveal  ·  Q to quit[/dim]")
+        # — question side (definition) —
+        question_content = Text()
+        question_content.append(back)
+        if tip:
+            question_content.append(f"\n\n💡 {tip}")
+        question_content.append("\n\n")
+        question_content.append("[dim]Space to reveal  ·  Q to quit[/dim]")
 
         console.clear()
-        console.print(Panel(front_content, title=header, border_style="cyan"))
+        console.print(Panel(question_content, title=header, border_style="cyan"))
 
         if _getkey() == "q":
             break
 
-        # — full card —
+        # — answer side (term) —
         full_content = Text()
-        full_content.append(front, style="bold")
-        full_content.append("\n\n")
-        full_content.append("─" * 50)
-        full_content.append("\n\n")
         full_content.append(back)
         if tip:
             full_content.append(f"\n\n💡 {tip}")
+        full_content.append("\n\n")
+        full_content.append("─" * 50)
+        full_content.append("\n\n")
+        full_content.append(front, style="bold")
 
         hint = "Q to quit" if i == total else "Space to continue  ·  Q to quit"
         full_content.append(f"\n\n[dim]{hint}[/dim]")
