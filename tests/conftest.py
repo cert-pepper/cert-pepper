@@ -57,14 +57,22 @@ async def seed_certification(
     code: str,
     name: str = "Test Exam",
     vendor: str = "Vendor",
+    passing_score: int = 750,
+    max_score: int = 900,
 ) -> int:
     """Insert a certification (if not exists) and return its id."""
     await session.execute(
         text(
-            "INSERT OR IGNORE INTO certifications (code, name, vendor) "
-            "VALUES (:code, :name, :vendor)"
+            "INSERT OR IGNORE INTO certifications (code, name, vendor, passing_score, max_score) "
+            "VALUES (:code, :name, :vendor, :passing_score, :max_score)"
         ),
-        {"code": code, "name": name, "vendor": vendor},
+        {
+            "code": code,
+            "name": name,
+            "vendor": vendor,
+            "passing_score": passing_score,
+            "max_score": max_score,
+        },
     )
     result = await session.execute(
         text("SELECT id FROM certifications WHERE code = :code"),

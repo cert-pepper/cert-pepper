@@ -13,6 +13,8 @@ CREATE TABLE IF NOT EXISTS certifications (
     code        TEXT NOT NULL UNIQUE,       -- e.g. "SY0-701"
     name        TEXT NOT NULL,              -- e.g. "CompTIA Security+"
     vendor      TEXT NOT NULL DEFAULT '',
+    passing_score INTEGER NOT NULL DEFAULT 750,
+    max_score   INTEGER NOT NULL DEFAULT 900,
     created_at  DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 

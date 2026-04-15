@@ -116,6 +116,14 @@ async def _run_migrations() -> list[str]:
             "add certification_id to predicted_scores",
             "ALTER TABLE predicted_scores ADD COLUMN certification_id INTEGER REFERENCES certifications(id)",  # noqa: E501
         ),
+        (
+            "add passing_score to certifications",
+            "ALTER TABLE certifications ADD COLUMN passing_score INTEGER NOT NULL DEFAULT 750",
+        ),
+        (
+            "add max_score to certifications",
+            "ALTER TABLE certifications ADD COLUMN max_score INTEGER NOT NULL DEFAULT 900",
+        ),
     ]
     applied: list[str] = []
     engine = get_engine()
@@ -142,8 +150,8 @@ async def _seed_defaults() -> None:
         # Insert certification
         await session.execute(
             text(
-                "INSERT OR IGNORE INTO certifications (code, name, vendor) "
-                "VALUES ('SY0-701', 'CompTIA Security+', 'CompTIA')"
+                "INSERT OR IGNORE INTO certifications (code, name, vendor, passing_score, max_score) "
+                "VALUES ('SY0-701', 'CompTIA Security+', 'CompTIA', 750, 900)"
             )
         )
 
