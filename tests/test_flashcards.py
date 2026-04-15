@@ -117,3 +117,43 @@ class TestFlashcardSession:
         assert len(printed) == 1
         assert "No flashcards" in str(printed[0])
 
+    async def test_show_answer_single_panel_per_card(self, db):
+        """show_answer=True renders one combined panel per card instead of two."""
+        from cert_pepper.cli.flashcards import run_flashcard_session
+
+        async with get_session() as session:
+            cert_id = await seed_certification(session, code="FC08")
+            await seed_domains_for_cert(session, cert_id)
+            await seed_flashcard(session, front="Term A", back="Def A", cert_id=cert_id)
+            await seed_flashcard(session, front="Term B", back="Def B", cert_id=cert_id)
+            await seed_flashcard(session, front="Term C", back="Def C", cert_id=cert_id)
+
+        printed = []
+        with patch("cert_pepper.cli.flashcards._getkey", return_value=""):
+            with patch("cert_pepper.cli.flashcards.console.print",
+                       side_effect=printed.append):
+                await run_flashcard_session(exam_code="FC08", show_answer=True)
+
+        # 3 cards × 1 panel + 1 completion message
+        assert len(printed) == 4
+
+    async def test_show_answer_panel_contains_both_sides(self, db):
+        """show_answer panel includes both definition and term."""
+        from cert_pepper.cli.flashcards import run_flashcard_session
+
+        async with get_session() as session:
+            cert_id = await seed_certification(session, code="FC09")
+            await seed_domains_for_cert(session, cert_id)
+            await seed_flashcard(session, front="CIA Triad", back="Confidentiality Integrity Availability",
+                                 cert_id=cert_id)
+
+        printed = []
+        with patch("cert_pepper.cli.flashcards._getkey", return_value=""):
+            with patch("cert_pepper.cli.flashcards.console.print",
+                       side_effect=printed.append):
+                await run_flashcard_session(exam_code="FC09", show_answer=True)
+
+        panel_text = str(printed[0].renderable)
+        assert "Confidentiality Integrity Availability" in panel_text
+        assert "CIA Triad" in panel_text
+

@@ -255,15 +255,19 @@ def flashcard(
     count: int | None = typer.Option(
         None, "--count", "-n", help="Max number of cards to show."
     ),
+    show_answer: bool = typer.Option(
+        False, "--show-answer", "-a", help="Show answer immediately; press Enter to advance."
+    ),
 ) -> None:
-    """Review flashcards — front and answer shown together."""
+    """Review flashcards — flip to reveal answer, or show both sides at once."""
     import asyncio
 
     from cert_pepper.cli.flashcards import run_flashcard_session
 
     asyncio.run(
         run_flashcard_session(
-            exam_code=exam, domain=domain, category=category, count=count
+            exam_code=exam, domain=domain, category=category, count=count,
+            show_answer=show_answer,
         )
     )
 

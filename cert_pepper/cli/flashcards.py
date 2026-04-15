@@ -29,6 +29,7 @@ async def run_flashcard_session(
     domain: int | None = None,
     category: str | None = None,
     count: int | None = None,
+    show_answer: bool = False,
 ) -> None:
     """Flip-style flashcard review — Enter reveals answer, Enter/Q advances."""
     async with get_session() as session:
@@ -82,35 +83,53 @@ async def run_flashcard_session(
             header_parts.append(cat)
         header = "  ·  ".join(header_parts)
 
-        # — question side (definition) —
-        question_content = Text()
-        question_content.append(back)
-        question_content.append("\n\n")
-        question_content.append("Enter to reveal  ·  Q to quit", style="dim")
+        nav_hint = "Q to quit" if i == total else "Enter to continue  ·  Q to quit"
 
-        console.clear()
-        console.print(Panel(question_content, title=header, border_style="cyan"))
+        if show_answer:
+            # — combined panel: definition + term visible immediately —
+            content = Text()
+            content.append(back)
+            content.append("\n\n")
+            content.append("─" * 50)
+            content.append("\n\n")
+            content.append(front, style="bold")
+            if full_term:
+                content.append(f"\n{full_term}", style="dim")
+            content.append(f"\n\n{nav_hint}", style="dim")
 
-        if _getkey() == "q":
-            break
+            console.clear()
+            console.print(Panel(content, title=header, border_style="cyan"))
 
-        # — answer side (term) —
-        full_content = Text()
-        full_content.append(back)
-        full_content.append("\n\n")
-        full_content.append("─" * 50)
-        full_content.append("\n\n")
-        full_content.append(front, style="bold")
-        if full_term:
-            full_content.append(f"\n{full_term}", style="dim")
+            if i < total and _getkey() == "q":
+                break
+        else:
+            # — question side (definition) —
+            question_content = Text()
+            question_content.append(back)
+            question_content.append("\n\n")
+            question_content.append("Enter to reveal  ·  Q to quit", style="dim")
 
-        hint = "Q to quit" if i == total else "Enter to continue  ·  Q to quit"
-        full_content.append(f"\n\n{hint}", style="dim")
+            console.clear()
+            console.print(Panel(question_content, title=header, border_style="cyan"))
 
-        console.clear()
-        console.print(Panel(full_content, title=header, border_style="cyan"))
+            if _getkey() == "q":
+                break
 
-        if i < total and _getkey() == "q":
-            break
+            # — answer side (term) —
+            full_content = Text()
+            full_content.append(back)
+            full_content.append("\n\n")
+            full_content.append("─" * 50)
+            full_content.append("\n\n")
+            full_content.append(front, style="bold")
+            if full_term:
+                full_content.append(f"\n{full_term}", style="dim")
+            full_content.append(f"\n\n{nav_hint}", style="dim")
+
+            console.clear()
+            console.print(Panel(full_content, title=header, border_style="cyan"))
+
+            if i < total and _getkey() == "q":
+                break
 
     console.print(f"\n[green]✓ Done. Reviewed {i}/{total} cards.[/green]")
