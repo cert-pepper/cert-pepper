@@ -14,13 +14,33 @@ from cert_pepper.models.content import ExamConfig, ParsedAcronym, ParsedFlashcar
 
 async def ingest_exam_config(session: AsyncSession, exam: ExamConfig) -> int:
     """Upsert certification and domains from ExamConfig. Returns cert_id."""
-    # Upsert certification (INSERT OR IGNORE — code is unique)
     await session.execute(
         text(
-            "INSERT OR IGNORE INTO certifications (code, name, vendor) "
-            "VALUES (:code, :name, :vendor)"
+            "INSERT OR IGNORE INTO certifications (code, name, vendor, passing_score, max_score) "
+            "VALUES (:code, :name, :vendor, :passing_score, :max_score)"
         ),
-        {"code": exam.code, "name": exam.name, "vendor": exam.vendor},
+        {
+            "code": exam.code,
+            "name": exam.name,
+            "vendor": exam.vendor,
+            "passing_score": exam.passing_score,
+            "max_score": exam.max_score,
+        },
+    )
+    # Keep scores fresh on re-ingest
+    await session.execute(
+        text(
+            "UPDATE certifications SET name=:name, vendor=:vendor, "
+            "passing_score=:passing_score, max_score=:max_score "
+            "WHERE code=:code"
+        ),
+        {
+            "code": exam.code,
+            "name": exam.name,
+            "vendor": exam.vendor,
+            "passing_score": exam.passing_score,
+            "max_score": exam.max_score,
+        },
     )
     result = await session.execute(
         text("SELECT id FROM certifications WHERE code = :code"),
@@ -28,7 +48,6 @@ async def ingest_exam_config(session: AsyncSession, exam: ExamConfig) -> int:
     )
     cert_id: int = result.scalar()  # type: ignore[assignment]
 
-    # Upsert each domain (update name and weight if code matches)
     for domain in exam.domains:
         await session.execute(
             text("""
