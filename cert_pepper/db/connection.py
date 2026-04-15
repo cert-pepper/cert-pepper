@@ -150,8 +150,9 @@ async def _seed_defaults() -> None:
         # Insert certification
         await session.execute(
             text(
-                "INSERT OR IGNORE INTO certifications (code, name, vendor, passing_score, max_score) "
-                "VALUES ('SY0-701', 'CompTIA Security+', 'CompTIA', 750, 900)"
+                "INSERT OR IGNORE INTO certifications"
+                " (code, name, vendor, passing_score, max_score)"
+                " VALUES ('SY0-701', 'CompTIA Security+', 'CompTIA', 750, 900)"
             )
         )
 

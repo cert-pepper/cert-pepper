@@ -350,7 +350,9 @@ async def run_study_session(
             elif use_ai and not is_correct:
                 try:
                     from cert_pepper.ai.explainer import get_explanation
-                    explanation = await get_explanation(session, q, answer)
+                    explanation = await get_explanation(
+                        session, q, answer, exam_code=exam_code or "SY0-701"
+                    )
                     console.print(Panel(explanation, title="[AI] Explanation", border_style="dim"))
                 except Exception:
                     pass  # silently skip AI on error

@@ -1,8 +1,8 @@
 """Predicted score calculator.
 
-Security+ scores: 100-900 scale, passing = 750.
-Predicted score = Σ(domain_accuracy × domain_weight) × 900
-Pass probability uses logistic function centered on 750.
+Scores use a 100-900 scale. Predicted score = Σ(domain_accuracy × domain_weight) × 900.
+Pass probability uses a logistic sigmoid centered on the certification's passing_score,
+read from the DB per certification (falls back to PASSING_SCORE constant if unavailable).
 """
 
 from __future__ import annotations

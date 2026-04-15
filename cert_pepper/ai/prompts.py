@@ -58,7 +58,8 @@ System roles, Templates.
 AI-driven threats (1.1): Automated phishing, AI-generated polymorphic malware,
 adversarial machine learning, malicious use of generative AI.
 Objective 1.2 — Data security: Data cleansing, Data lineage, Data integrity, Data provenance,
-Data augmentation, Watermarking, RAG (Vector storage, Embeddings), Structured/Semi-structured/Unstructured data.
+Data augmentation, Watermarking, RAG (Vector storage, Embeddings),
+Structured/Semi-structured/Unstructured data.
 Objective 1.3 — AI lifecycle: Business use case, Data collection (trustworthiness, authenticity),
 Data preparation, Model development/selection, Model evaluation, Deployment, Validation,
 Monitoring and maintenance, Feedback and iteration.
@@ -74,15 +75,18 @@ Gateway controls: prompt firewalls, rate limits, token limits, input quotas (dat
 modality limits, endpoint access controls. Guardrail testing and validation.
 Objective 2.3 — Access controls: Model access, Data access, Agent access, API access.
 Objective 2.4 — Data security controls: Encryption (in transit, at rest, in use),
-Data anonymization, Data pseudonymization, Data classification labels, Data redaction, Data masking, Data minimization.
+Data anonymization, Data pseudonymization, Data classification labels,
+Data redaction, Data masking, Data minimization.
 Objective 2.5 — Monitoring and auditing: Prompt monitoring (query/response), log monitoring,
 log sanitization, log protection, response confidence level, rate monitoring,
 AI cost monitoring (prompts/storage/response/processing),
 auditing for hallucinations/accuracy/bias and fairness/access.
 Objective 2.6 — Attacks: Backdoor, Trojan, Prompt injection, Model poisoning, Data poisoning,
 Jailbreaking, Input manipulation, Introducing biases, Circumventing AI guardrails,
-Manipulating application integrations, Model inversion, Training data extraction (variant of model inversion),
-Model theft, AI supply chain attacks, Transfer learning attacks, Model skewing, Output integrity attacks,
+Manipulating application integrations, Model inversion,
+Training data extraction (variant of model inversion),
+Model theft, AI supply chain attacks, Transfer learning attacks,
+Model skewing, Output integrity attacks,
 Membership inference, Insecure output handling, Model DoS, Sensitive information disclosure,
 Insecure plug-in design, Excessive agency, Overreliance.
 Compensating controls: Prompt firewalls, Model guardrails, Access controls, Data integrity controls,
@@ -121,7 +125,8 @@ Shadow IT / Shadow AI.
 Objective 4.3 — Compliance: EU AI Act, OECD standards, ISO AI standards, NIST AIRMF.
 Corporate policies: Sanctioned vs. unsanctioned models, Private vs. public models,
 Sensitive data governance. Third-party compliance evaluations. Data sovereignty.
-Industry-specific compliance (healthcare: HIPAA implications for AI; finance: PCI DSS and AI fraud systems).""",
+Industry-specific compliance (healthcare: HIPAA implications for AI;
+finance: PCI DSS and AI fraud systems).""",
 }
 
 
