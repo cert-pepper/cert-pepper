@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import random
 
+import click
 from rich.console import Console
 from rich.panel import Panel
-from rich.prompt import Prompt
 from rich.text import Text
 from sqlalchemy import text
 
@@ -15,6 +15,14 @@ from cert_pepper.db.exams import resolve_cert_id
 
 console = Console()
 
+_QUIT_KEYS = {b"q", b"Q", "\x1b"}  # q, Q, Escape
+
+
+def _getkey() -> str:
+    """Read one keypress. Returns 'q' if user pressed q/Q/Escape."""
+    ch = click.getchar(echo=False)
+    return "q" if ch in _QUIT_KEYS else ""
+
 
 async def run_flashcard_session(
     exam_code: str | None = None,
@@ -22,7 +30,7 @@ async def run_flashcard_session(
     category: str | None = None,
     count: int | None = None,
 ) -> None:
-    """Display flashcards one at a time — front and answer visible together."""
+    """Flip-style flashcard review — space reveals answer, space/enter advances."""
     async with get_session() as session:
         try:
             cert_id = await resolve_cert_id(session, exam_code)
@@ -65,15 +73,6 @@ async def run_flashcard_session(
     for i, card in enumerate(cards, 1):
         _card_id, front, back, tip, cat, domain_num, _domain_name = card
 
-        content = Text()
-        content.append(front, style="bold")
-        content.append("\n\n")
-        content.append("─" * 50)
-        content.append("\n\n")
-        content.append(back)
-        if tip:
-            content.append(f"\n\n💡 {tip}")
-
         header_parts = [f"Flashcard {i}/{total}"]
         if domain_num is not None:
             header_parts.append(f"Domain {domain_num}")
@@ -81,12 +80,35 @@ async def run_flashcard_session(
             header_parts.append(cat)
         header = "  ·  ".join(header_parts)
 
-        console.clear()
-        console.print(Panel(content, title=header, border_style="cyan"))
+        # — front only —
+        front_content = Text()
+        front_content.append(front, style="bold")
+        front_content.append("\n\n")
+        front_content.append("[dim]Space to reveal  ·  Q to quit[/dim]")
 
-        if i < total:
-            response = Prompt.ask("[Enter] Next  [Q] Quit", default="")
-            if response.strip().lower() == "q":
-                break
+        console.clear()
+        console.print(Panel(front_content, title=header, border_style="cyan"))
+
+        if _getkey() == "q":
+            break
+
+        # — full card —
+        full_content = Text()
+        full_content.append(front, style="bold")
+        full_content.append("\n\n")
+        full_content.append("─" * 50)
+        full_content.append("\n\n")
+        full_content.append(back)
+        if tip:
+            full_content.append(f"\n\n💡 {tip}")
+
+        hint = "Q to quit" if i == total else "Space to continue  ·  Q to quit"
+        full_content.append(f"\n\n[dim]{hint}[/dim]")
+
+        console.clear()
+        console.print(Panel(full_content, title=header, border_style="cyan"))
+
+        if i < total and _getkey() == "q":
+            break
 
     console.print(f"\n[green]✓ Done. Reviewed {i}/{total} cards.[/green]")
