@@ -81,6 +81,7 @@ async def run_flashcard_session(
             header_parts.append(cat)
         header = "  ·  ".join(header_parts)
 
+        console.clear()
         console.print(Panel(content, title=header, border_style="cyan"))
 
         if i < total:
