@@ -84,7 +84,7 @@ async def run_flashcard_session(
         question_content = Text()
         question_content.append(back)
         question_content.append("\n\n")
-        question_content.append("Space to reveal  ·  Q to quit", style="dim")
+        question_content.append("Enter to reveal  ·  Q to quit", style="dim")
 
         console.clear()
         console.print(Panel(question_content, title=header, border_style="cyan"))
@@ -100,7 +100,7 @@ async def run_flashcard_session(
         full_content.append("\n\n")
         full_content.append(front, style="bold")
 
-        hint = "Q to quit" if i == total else "Space to continue  ·  Q to quit"
+        hint = "Q to quit" if i == total else "Enter to continue  ·  Q to quit"
         full_content.append(f"\n\n{hint}", style="dim")
 
         console.clear()
