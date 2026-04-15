@@ -224,6 +224,14 @@ async def predict_score(
         from cert_pepper.db.exams import resolve_cert_id
         cert_id = await resolve_cert_id(session)
 
+    # Read passing_score from DB (falls back to global constant if row missing)
+    cert_result = await session.execute(
+        text("SELECT passing_score FROM certifications WHERE id = :cid"),
+        {"cid": cert_id},
+    )
+    cert_row = cert_result.fetchone()
+    passing_score = cert_row[0] if cert_row is not None else PASSING_SCORE
+
     # Read domain weights from DB
     result = await session.execute(
         text("SELECT number, weight_pct FROM domains WHERE certification_id = :cert_id"),
@@ -270,7 +278,7 @@ async def predict_score(
 
     # Pass probability: logistic sigmoid centered on passing_score
     k = 50  # steepness: 50 points spans ~80% of the sigmoid
-    pass_prob = 1.0 / (1.0 + math.exp(-(predicted - PASSING_SCORE) / k))
+    pass_prob = 1.0 / (1.0 + math.exp(-(predicted - passing_score) / k))
 
     return PredictedScore(
         domain_accuracies=d_acc,
