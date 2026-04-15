@@ -176,6 +176,40 @@ async def seed_session(session, user_id: int) -> int:
     return result.scalar()
 
 
+async def seed_flashcard(
+    session,
+    front: str = "Term",
+    back: str = "Definition",
+    tip: str = "",
+    category: str = "General",
+    domain_number: int = 1,
+    cert_id: int | None = None,
+) -> int:
+    """Insert a flashcard and return its id."""
+    if cert_id is not None:
+        result = await session.execute(
+            text("SELECT id FROM domains WHERE number = :n AND certification_id = :c"),
+            {"n": domain_number, "c": cert_id},
+        )
+    else:
+        result = await session.execute(
+            text("SELECT id FROM domains WHERE number = :n"),
+            {"n": domain_number},
+        )
+    domain_id = result.scalar()
+    assert domain_id is not None, f"Domain {domain_number} not found — was init_db called?"
+    await session.execute(
+        text("""
+            INSERT INTO flashcards (domain_id, category, front, back, tip, certification_id)
+            VALUES (:did, :cat, :front, :back, :tip, :cid)
+        """),
+        {"did": domain_id, "cat": category, "front": front,
+         "back": back, "tip": tip, "cid": cert_id},
+    )
+    result = await session.execute(text("SELECT last_insert_rowid()"))
+    return result.scalar()
+
+
 async def get_user_id(session) -> int:
     """Return the default user's id."""
     result = await session.execute(
