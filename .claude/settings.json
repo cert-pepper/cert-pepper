@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash -c 'cd /home/ubuntu/github/cert-pepper && ruff check --fix \"$FILE\" && ruff format \"$FILE\"' 2>/dev/null || true"
+            "command": "bash -c 'ruff check --fix \"$FILE\" && ruff format \"$FILE\"' 2>/dev/null || true"
           }
         ]
       }
@@ -16,7 +16,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash /home/ubuntu/github/cert-pepper/.claude/hooks/doc-editor-continue.sh"
+            "command": "bash .claude/hooks/doc-editor-continue.sh"
           }
         ]
       }
