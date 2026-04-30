@@ -48,7 +48,7 @@ async def run_flashcard_session(
                 ON a.acronym = f.front AND a.certification_id = f.certification_id
             WHERE f.certification_id = :cert_id
         """
-        params: dict = {"cert_id": cert_id}
+        params: dict[str, int | str] = {"cert_id": cert_id}
 
         if domain is not None:
             query += " AND d.number = :domain"
