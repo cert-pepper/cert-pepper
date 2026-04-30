@@ -240,6 +240,38 @@ def goal_show(
     asyncio.run(_goal_show(exam))
 
 
+@app.command("flashcards")
+def flashcards(
+    exam: str | None = typer.Option(
+        None, "--exam", "-e",
+        help="Exam code (e.g. CY0-001). Auto-detects when only one exam is present."
+    ),
+    domain: int | None = typer.Option(
+        None, "--domain", "-d", help="Filter to domain number."
+    ),
+    category: str | None = typer.Option(
+        None, "--category", "-c", help="Filter to category name (e.g. 'AI Attacks')."
+    ),
+    count: int | None = typer.Option(
+        None, "--count", "-n", help="Max number of cards to show."
+    ),
+    show_answer: bool = typer.Option(
+        False, "--show-answer", "-a", help="Show answer immediately; press Enter to advance."
+    ),
+) -> None:
+    """Review flashcards — flip to reveal answer, or show both sides at once."""
+    import asyncio
+
+    from cert_pepper.cli.flashcards import run_flashcard_session
+
+    asyncio.run(
+        run_flashcard_session(
+            exam_code=exam, domain=domain, category=category, count=count,
+            show_answer=show_answer,
+        )
+    )
+
+
 @app.command("pregenerate")
 def pregenerate(
     domain: int | None = typer.Option(

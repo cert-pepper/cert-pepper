@@ -14,13 +14,18 @@ console = Console()
 
 
 async def run_pregenerate(domain_filter: int | None = None) -> None:
-    """Pre-generate AI explanations for all questions."""
+    """Pre-generate AI explanations for all questions.
+
+    Each question's exam_code is derived from its own certification, so
+    explanations are cached against the right system prompt regardless of
+    how many exams are ingested.
+    """
 
     console.print("[cyan]Pre-generating AI explanations...[/cyan]")
     console.print("[dim]This runs once and stores results in the DB.[/dim]\n")
 
     async with get_session() as session:
-        # Fetch questions
+        # Fetch questions with their cert code derived via domain → certification.
         params: dict[str, int] = {}
         domain_clause = ""
         if domain_filter:
@@ -30,33 +35,38 @@ async def run_pregenerate(domain_filter: int | None = None) -> None:
             text(f"""
                 SELECT q.id, q.domain_id, d.number, q.number, q.stem,
                        q.option_a, q.option_b, q.option_c, q.option_d,
-                       q.correct_answer, q.explanation, q.difficulty, q.source_file
+                       q.correct_answer, q.explanation, q.difficulty, q.source_file,
+                       c.code
                 FROM questions q
                 JOIN domains d ON d.id = q.domain_id
+                JOIN certifications c ON c.id = d.certification_id
                 WHERE 1=1 {domain_clause}
-                ORDER BY d.number, q.number
+                ORDER BY c.code, d.number, q.number
             """),
             params,
         )
         rows = result.fetchall()
-        questions = [
-            Question(
-                id=row[0], domain_id=row[1], domain_number=row[2], number=row[3],
-                stem=row[4], option_a=row[5], option_b=row[6], option_c=row[7],
-                option_d=row[8], correct_answer=row[9], explanation=row[10],
-                difficulty=row[11], source_file=row[12],
+        items: list[tuple[Question, str]] = [
+            (
+                Question(
+                    id=row[0], domain_id=row[1], domain_number=row[2], number=row[3],
+                    stem=row[4], option_a=row[5], option_b=row[6], option_c=row[7],
+                    option_d=row[8], correct_answer=row[9], explanation=row[10],
+                    difficulty=row[11], source_file=row[12],
+                ),
+                row[13],
             )
             for row in rows
         ]
 
-        if not questions:
+        if not items:
             console.print("[yellow]No questions found. Run `cert-pepper ingest` first.[/yellow]")
             return
 
         console.print(
-            f"Found [cyan]{len(questions)}[/cyan] questions. "
+            f"Found [cyan]{len(items)}[/cyan] questions. "
             f"Generating explanations for wrong answers"
-            f" (~{len(questions) * 3} API calls)...\n"
+            f" (~{len(items) * 3} API calls)...\n"
         )
 
         with Progress(
@@ -66,14 +76,15 @@ async def run_pregenerate(domain_filter: int | None = None) -> None:
             TextColumn("{task.completed}/{task.total}"),
             console=console,
         ) as progress:
-            task = progress.add_task("Generating...", total=len(questions))
+            task = progress.add_task("Generating...", total=len(items))
 
-            for q in questions:
-                progress.update(task, description=f"Q{q.number} (D{q.domain_number})")
-                # Generate for each wrong answer
+            for q, exam_code in items:
+                progress.update(
+                    task,
+                    description=f"{exam_code} Q{q.number} (D{q.domain_number})",
+                )
                 wrong_answers = [a for a in ["A", "B", "C", "D"] if a != q.correct_answer]
                 for wrong in wrong_answers:
-                    # Check cache
                     cached = await session.execute(
                         text("""
                             SELECT 1 FROM ai_explanations
@@ -87,7 +98,7 @@ async def run_pregenerate(domain_filter: int | None = None) -> None:
 
                     try:
                         from cert_pepper.ai.explainer import get_explanation
-                        await get_explanation(session, q, wrong)
+                        await get_explanation(session, q, wrong, exam_code=exam_code)
                     except Exception as e:
                         console.print(f"\n[red]Error on Q{q.id}/{wrong}: {e}[/red]")
 

@@ -877,3 +877,95 @@ class TestPepperScore:
         level, name = pepper_score(0.85)
         assert level == 9
         assert name == "Ghost Pepper"
+
+
+# ---------------------------------------------------------------------------
+# TestPredictScorePassingScorePerCert
+# ---------------------------------------------------------------------------
+
+class TestPredictScorePassingScorePerCert:
+    async def test_pass_probability_uses_cert_passing_score(self, db):
+        """predict_score sigmoid must center on cert's passing_score, not 750.
+
+        Two certs, identical accuracy → same predicted_score (~675).
+        Cert with passing_score=600 → pass_prob > 0.5.
+        Cert with passing_score=750 → pass_prob < 0.5.
+        """
+        from cert_pepper.db.connection import get_session
+        from cert_pepper.engine.scorer import predict_score
+        from sqlalchemy import text
+
+        async def _seed_cert(session, code, passing_score):
+            await session.execute(
+                text(
+                    "INSERT OR IGNORE INTO certifications "
+                    "(code, name, vendor, passing_score, max_score) "
+                    "VALUES (:code, :code, 'X', :ps, 900)"
+                ),
+                {"code": code, "ps": passing_score},
+            )
+            result = await session.execute(
+                text("SELECT id FROM certifications WHERE code=:code"), {"code": code}
+            )
+            cert_id = result.scalar()
+            await session.execute(
+                text(
+                    "INSERT INTO domains (certification_id, number, name, weight_pct) "
+                    "VALUES (:cid, 1, 'D1', 100.0)"
+                ),
+                {"cid": cert_id},
+            )
+            result = await session.execute(
+                text("SELECT id FROM domains WHERE certification_id=:cid AND number=1"),
+                {"cid": cert_id},
+            )
+            domain_id = result.scalar()
+            q_ids = []
+            for i in range(4):
+                result = await session.execute(
+                    text(
+                        "INSERT INTO questions "
+                        "(domain_id, number, stem, option_a, option_b, option_c, option_d, "
+                        "correct_answer, explanation) "
+                        "VALUES (:did, :num, 'Q?', 'A', 'B', 'C', 'D', 'A', 'Exp') "
+                        "RETURNING id"
+                    ),
+                    {"did": domain_id, "num": i + 1},
+                )
+                q_ids.append(result.scalar())
+            return cert_id, q_ids
+
+        async with get_session() as session:
+            user_id = await get_user_id(session)
+            cert_600_id, q600 = await _seed_cert(session, "CY0-TEST", 600)
+            cert_750_id, q750 = await _seed_cert(session, "SY0-TEST", 750)
+            sess_id = await seed_session(session, user_id)
+            # 3 correct out of 4 seen → adjusted accuracy = 0.75 → predicted ≈ 675
+            for i, qid in enumerate(q600):
+                await seed_attempt(
+                    session, session_id=sess_id, user_id=user_id,
+                    question_id=qid, is_correct=1 if i < 3 else 0,
+                )
+            for i, qid in enumerate(q750):
+                await seed_attempt(
+                    session, session_id=sess_id, user_id=user_id,
+                    question_id=qid, is_correct=1 if i < 3 else 0,
+                )
+
+        async with get_session() as session:
+            score_600 = await predict_score(session, user_id=user_id, cert_id=cert_600_id)
+            score_750 = await predict_score(session, user_id=user_id, cert_id=cert_750_id)
+
+        # Same accuracy → same predicted score
+        assert score_600.predicted_score == score_750.predicted_score
+
+        # Lower threshold → higher pass probability at the same predicted score
+        assert score_600.pass_probability > score_750.pass_probability, (
+            f"600-passing cert should have higher pass_prob; "
+            f"got 600-cert={score_600.pass_probability:.3f}, "
+            f"750-cert={score_750.pass_probability:.3f}"
+        )
+        # At predicted ~675: above 600 threshold → pass_prob > 0.5
+        assert score_600.pass_probability > 0.5
+        # At predicted ~675: below 750 threshold → pass_prob < 0.5
+        assert score_750.pass_probability < 0.5

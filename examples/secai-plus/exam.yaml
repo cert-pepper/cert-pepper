@@ -1,0 +1,18 @@
+code: "CY0-001"
+name: "CompTIA SecAI+"
+vendor: "CompTIA"
+passing_score: 600
+max_score: 900
+domains:
+  - number: 1
+    name: "Basic AI Concepts Related to Cybersecurity"
+    weight_pct: 17.0
+  - number: 2
+    name: "Securing AI Systems"
+    weight_pct: 40.0
+  - number: 3
+    name: "AI-assisted Security"
+    weight_pct: 24.0
+  - number: 4
+    name: "AI Governance, Risk, and Compliance"
+    weight_pct: 19.0

@@ -299,9 +299,49 @@ class TestMigrations:
 
         applied = await _run_migrations()
 
-        assert len(applied) == 4
+        assert len(applied) == 6
         assert all(isinstance(name, str) for name in applied)
 
         await engine.dispose()
         _conn_module._engine = None
         _conn_module._session_factory = None
+
+
+# ---------------------------------------------------------------------------
+# certifications schema columns
+# ---------------------------------------------------------------------------
+
+class TestCertificationsSchema:
+    async def test_certifications_has_passing_score_column(self, db):
+        async with get_session() as session:
+            result = await session.execute(
+                text("PRAGMA table_info(certifications)")
+            )
+            columns = {row[1] for row in result.fetchall()}
+        assert "passing_score" in columns
+
+    async def test_certifications_has_max_score_column(self, db):
+        async with get_session() as session:
+            result = await session.execute(
+                text("PRAGMA table_info(certifications)")
+            )
+            columns = {row[1] for row in result.fetchall()}
+        assert "max_score" in columns
+
+    async def test_default_cert_has_correct_passing_score(self, db):
+        async with get_session() as session:
+            result = await session.execute(
+                text("SELECT passing_score FROM certifications WHERE code='SY0-701'")
+            )
+            row = result.fetchone()
+        assert row is not None
+        assert row[0] == 750
+
+    async def test_default_cert_has_correct_max_score(self, db):
+        async with get_session() as session:
+            result = await session.execute(
+                text("SELECT max_score FROM certifications WHERE code='SY0-701'")
+            )
+            row = result.fetchone()
+        assert row is not None
+        assert row[0] == 900

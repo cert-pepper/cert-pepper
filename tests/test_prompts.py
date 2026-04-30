@@ -19,6 +19,7 @@ from cert_pepper.ai.prompts import (
     get_explainer_system,
     get_hint_system,
 )
+from cert_pepper.ai.prompts import SECAI_DOMAIN_CONTEXT
 from cert_pepper.ai.client import make_prompt_hash
 
 
@@ -135,3 +136,47 @@ class TestMakePromptHash:
         h2 = make_prompt_hash(system, user)
         assert h1 == h2
         assert len(h1) == 16
+
+
+class TestGetExplainerSystemSecAI:
+    def test_secai_domain1_returns_string(self):
+        result = get_explainer_system(1, exam_code="CY0-001")
+        assert isinstance(result, str) and len(result) > 100
+
+    def test_secai_domain2_mentions_attacks(self):
+        result = get_explainer_system(2, exam_code="CY0-001")
+        lower = result.lower()
+        assert "attack" in lower or "adversar" in lower or "owasp" in lower
+
+    def test_secai_domain3_mentions_tools_or_automation(self):
+        result = get_explainer_system(3, exam_code="CY0-001")
+        lower = result.lower()
+        assert "tool" in lower or "automat" in lower or "detect" in lower
+
+    def test_secai_domain4_mentions_governance_or_compliance(self):
+        result = get_explainer_system(4, exam_code="CY0-001")
+        lower = result.lower()
+        assert "governance" in lower or "compliance" in lower or "grc" in lower
+
+    def test_secai_and_sy0_domain1_are_different(self):
+        sy0 = get_explainer_system(1, exam_code="SY0-701")
+        secai = get_explainer_system(1, exam_code="CY0-001")
+        assert sy0 != secai
+
+    def test_secai_all_four_domains_are_distinct(self):
+        prompts = [get_explainer_system(i, exam_code="CY0-001") for i in range(1, 5)]
+        assert len(set(prompts)) == 4
+
+    def test_secai_unknown_domain_falls_back_to_domain1(self):
+        fallback = get_explainer_system(99, exam_code="CY0-001")
+        d1 = get_explainer_system(1, exam_code="CY0-001")
+        assert fallback == d1
+
+    def test_sy0_backward_compat_no_exam_code(self):
+        result = get_explainer_system(1)
+        assert DOMAIN_CONTEXT[1] in result
+
+    def test_secai_contains_explainer_suffix(self):
+        for domain in range(1, 5):
+            result = get_explainer_system(domain, exam_code="CY0-001")
+            assert EXPLAINER_SUFFIX in result, f"Missing EXPLAINER_SUFFIX for domain {domain}"

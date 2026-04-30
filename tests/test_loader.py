@@ -376,3 +376,73 @@ class TestGetDomainIdScoped:
         async with get_session() as session:
             domain_id = await get_domain_id(session, 4)
         assert domain_id is not None
+
+
+# ---------------------------------------------------------------------------
+# ingest_exam_config — passing_score and max_score
+# ---------------------------------------------------------------------------
+
+class TestIngestExamConfigPassingScore:
+    async def test_stores_passing_score(self, db):
+        from cert_pepper.ingestion.loader import ingest_exam_config
+        from cert_pepper.models.content import ExamConfig, ExamDomain
+        from cert_pepper.db.connection import get_session
+        from sqlalchemy import text
+        exam = ExamConfig(
+            code="TST-001",
+            name="Test Exam",
+            vendor="TestVendor",
+            passing_score=650,
+            max_score=900,
+            domains=[ExamDomain(number=1, name="Domain One", weight_pct=100.0)],
+        )
+        async with get_session() as session:
+            cert_id = await ingest_exam_config(session, exam)
+            result = await session.execute(
+                text("SELECT passing_score FROM certifications WHERE id = :id"),
+                {"id": cert_id},
+            )
+            row = result.fetchone()
+        assert row is not None
+        assert row[0] == 650
+
+    async def test_stores_max_score(self, db):
+        from cert_pepper.ingestion.loader import ingest_exam_config
+        from cert_pepper.models.content import ExamConfig, ExamDomain
+        from cert_pepper.db.connection import get_session
+        from sqlalchemy import text
+        exam = ExamConfig(
+            code="TST-002",
+            name="Test Exam 2",
+            vendor="TestVendor",
+            passing_score=600,
+            max_score=900,
+            domains=[ExamDomain(number=1, name="Domain One", weight_pct=100.0)],
+        )
+        async with get_session() as session:
+            cert_id = await ingest_exam_config(session, exam)
+            result = await session.execute(
+                text("SELECT max_score FROM certifications WHERE id = :id"),
+                {"id": cert_id},
+            )
+            row = result.fetchone()
+        assert row is not None
+        assert row[0] == 900
+
+    async def test_reingest_updates_passing_score(self, db):
+        """Re-ingesting with a changed passing_score should update the stored value."""
+        from cert_pepper.ingestion.loader import ingest_exam_config
+        from cert_pepper.models.content import ExamConfig, ExamDomain
+        from cert_pepper.db.connection import get_session
+        from sqlalchemy import text
+        domain = ExamDomain(number=1, name="D1", weight_pct=100.0)
+        exam_v1 = ExamConfig(code="TST-003", name="Exam", vendor="X", passing_score=700, max_score=900, domains=[domain])
+        exam_v2 = ExamConfig(code="TST-003", name="Exam", vendor="X", passing_score=650, max_score=900, domains=[domain])
+        async with get_session() as session:
+            await ingest_exam_config(session, exam_v1)
+            await ingest_exam_config(session, exam_v2)
+            result = await session.execute(
+                text("SELECT passing_score FROM certifications WHERE code='TST-003'")
+            )
+            row = result.fetchone()
+        assert row[0] == 650

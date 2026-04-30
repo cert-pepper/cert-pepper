@@ -1,8 +1,8 @@
 """Predicted score calculator.
 
-Security+ scores: 100-900 scale, passing = 750.
-Predicted score = Σ(domain_accuracy × domain_weight) × 900
-Pass probability uses logistic function centered on 750.
+Scores use a 100-900 scale. Predicted score = Σ(domain_accuracy × domain_weight) × 900.
+Pass probability uses a logistic sigmoid centered on the certification's passing_score,
+read from the DB per certification (falls back to PASSING_SCORE constant if unavailable).
 """
 
 from __future__ import annotations
@@ -224,6 +224,14 @@ async def predict_score(
         from cert_pepper.db.exams import resolve_cert_id
         cert_id = await resolve_cert_id(session)
 
+    # Read passing_score from DB (falls back to global constant if row missing)
+    cert_result = await session.execute(
+        text("SELECT passing_score FROM certifications WHERE id = :cid"),
+        {"cid": cert_id},
+    )
+    cert_row = cert_result.fetchone()
+    passing_score = cert_row[0] if cert_row is not None else PASSING_SCORE
+
     # Read domain weights from DB
     result = await session.execute(
         text("SELECT number, weight_pct FROM domains WHERE certification_id = :cert_id"),
@@ -270,7 +278,7 @@ async def predict_score(
 
     # Pass probability: logistic sigmoid centered on passing_score
     k = 50  # steepness: 50 points spans ~80% of the sigmoid
-    pass_prob = 1.0 / (1.0 + math.exp(-(predicted - PASSING_SCORE) / k))
+    pass_prob = 1.0 / (1.0 + math.exp(-(predicted - passing_score) / k))
 
     return PredictedScore(
         domain_accuracies=d_acc,
