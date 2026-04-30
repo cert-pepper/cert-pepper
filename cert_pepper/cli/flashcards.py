@@ -15,7 +15,7 @@ from cert_pepper.db.exams import resolve_cert_id
 
 console = Console()
 
-_QUIT_KEYS = {b"q", b"Q", "\x1b"}  # q, Q, Escape
+_QUIT_KEYS = {"q", "Q", "\x1b"}  # q, Q, Escape
 
 
 def _getkey() -> str:
@@ -71,7 +71,7 @@ async def run_flashcard_session(
         cards = cards[:count]
 
     total = len(cards)
-    i = 0
+    shown = 0
 
     for i, card in enumerate(cards, 1):
         _card_id, front, back, _tip, cat, domain_num, _domain_name, full_term = card
@@ -83,7 +83,11 @@ async def run_flashcard_session(
             header_parts.append(cat)
         header = "  ·  ".join(header_parts)
 
-        nav_hint = "Q to quit" if i == total else "Enter to continue  ·  Q to quit"
+        nav_hint = (
+            "Enter to finish  ·  Q to quit"
+            if i == total
+            else "Enter to continue  ·  Q to quit"
+        )
 
         if show_answer:
             # — combined panel: definition + term visible immediately —
@@ -100,7 +104,8 @@ async def run_flashcard_session(
             console.clear()
             console.print(Panel(content, title=header, border_style="cyan"))
 
-            if i < total and _getkey() == "q":
+            if _getkey() == "q":
+                shown = i
                 break
         else:
             # — question side (definition) —
@@ -113,6 +118,7 @@ async def run_flashcard_session(
             console.print(Panel(question_content, title=header, border_style="cyan"))
 
             if _getkey() == "q":
+                shown = i - 1
                 break
 
             # — answer side (term) —
@@ -129,7 +135,10 @@ async def run_flashcard_session(
             console.clear()
             console.print(Panel(full_content, title=header, border_style="cyan"))
 
-            if i < total and _getkey() == "q":
+            if _getkey() == "q":
+                shown = i
                 break
 
-    console.print(f"\n[green]✓ Done. Reviewed {i}/{total} cards.[/green]")
+        shown = i
+
+    console.print(f"\n[green]✓ Done. Reviewed {shown}/{total} cards.[/green]")

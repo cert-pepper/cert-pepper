@@ -15,25 +15,15 @@ from cert_pepper.models.content import ExamConfig, ParsedAcronym, ParsedFlashcar
 async def ingest_exam_config(session: AsyncSession, exam: ExamConfig) -> int:
     """Upsert certification and domains from ExamConfig. Returns cert_id."""
     await session.execute(
-        text(
-            "INSERT OR IGNORE INTO certifications (code, name, vendor, passing_score, max_score) "
-            "VALUES (:code, :name, :vendor, :passing_score, :max_score)"
-        ),
-        {
-            "code": exam.code,
-            "name": exam.name,
-            "vendor": exam.vendor,
-            "passing_score": exam.passing_score,
-            "max_score": exam.max_score,
-        },
-    )
-    # Keep scores fresh on re-ingest
-    await session.execute(
-        text(
-            "UPDATE certifications SET name=:name, vendor=:vendor, "
-            "passing_score=:passing_score, max_score=:max_score "
-            "WHERE code=:code"
-        ),
+        text("""
+            INSERT INTO certifications (code, name, vendor, passing_score, max_score)
+            VALUES (:code, :name, :vendor, :passing_score, :max_score)
+            ON CONFLICT(code) DO UPDATE SET
+                name=excluded.name,
+                vendor=excluded.vendor,
+                passing_score=excluded.passing_score,
+                max_score=excluded.max_score
+        """),
         {
             "code": exam.code,
             "name": exam.name,

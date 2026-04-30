@@ -4,6 +4,9 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
+import pytest
+from rich.panel import Panel
+
 from cert_pepper.db.connection import get_session
 from tests.conftest import (
     seed_certification,
@@ -12,9 +15,95 @@ from tests.conftest import (
 )
 
 
+def _panel_texts(printed: list) -> list[str]:
+    """Return text from each Panel in order — stable across cosmetic prints."""
+    return [str(p.renderable) for p in printed if isinstance(p, Panel)]
+
+
+def _all_panel_text(printed: list) -> str:
+    """Concatenate all panel renderables for substring assertions."""
+    return "\n".join(_panel_texts(printed))
+
+
+class TestLastCardWaitsForKeypress:
+    """The final card's reveal panel must wait for a keypress; otherwise
+    the panel renders and then immediately gets buried by the Done line."""
+
+    async def test_flip_mode_waits_on_last_answer_side(self, db):
+        from cert_pepper.cli.flashcards import run_flashcard_session
+
+        async with get_session() as session:
+            cert_id = await seed_certification(session, code="FCL1")
+            await seed_domains_for_cert(session, cert_id)
+            for i in range(3):
+                await seed_flashcard(
+                    session, front=f"T{i}", back=f"D{i}", cert_id=cert_id
+                )
+
+        with patch(
+            "cert_pepper.cli.flashcards._getkey", return_value=""
+        ) as mock_getkey:
+            await run_flashcard_session(exam_code="FCL1")
+
+        # 3 cards × 2 keypresses (question side + answer side) each.
+        assert mock_getkey.call_count == 6
+
+    async def test_show_answer_mode_waits_on_last_card(self, db):
+        from cert_pepper.cli.flashcards import run_flashcard_session
+
+        async with get_session() as session:
+            cert_id = await seed_certification(session, code="FCL2")
+            await seed_domains_for_cert(session, cert_id)
+            for i in range(3):
+                await seed_flashcard(
+                    session, front=f"T{i}", back=f"D{i}", cert_id=cert_id
+                )
+
+        with patch(
+            "cert_pepper.cli.flashcards._getkey", return_value=""
+        ) as mock_getkey:
+            await run_flashcard_session(exam_code="FCL2", show_answer=True)
+
+        # 3 cards × 1 keypress each (combined panel).
+        assert mock_getkey.call_count == 3
+
+
+class TestCommandRegistration:
+    """The CLI command is plural — `flashcards` — to match the content
+    directory and PR documentation."""
+
+    def test_flashcards_command_registered(self):
+        from cert_pepper.cli.main import app
+
+        names = {cmd.name for cmd in app.registered_commands}
+        assert "flashcards" in names
+        assert "flashcard" not in names
+
+
+class TestGetKey:
+    """Direct tests for _getkey — patch click.getchar, not _getkey itself.
+
+    Earlier tests stubbed _getkey, hiding a bytes/str mismatch in _QUIT_KEYS.
+    """
+
+    @pytest.mark.parametrize("ch", ["q", "Q", "\x1b"])
+    def test_quit_keys_return_q(self, ch):
+        from cert_pepper.cli.flashcards import _getkey
+
+        with patch("cert_pepper.cli.flashcards.click.getchar", return_value=ch):
+            assert _getkey() == "q"
+
+    @pytest.mark.parametrize("ch", ["", "\r", "\n", "a"])
+    def test_non_quit_keys_return_empty(self, ch):
+        from cert_pepper.cli.flashcards import _getkey
+
+        with patch("cert_pepper.cli.flashcards.click.getchar", return_value=ch):
+            assert _getkey() == ""
+
+
 class TestFlashcardSession:
     async def test_run_flashcard_session_shows_all_cards(self, db):
-        """Three cards → 6 panel prints (front+full per card) plus one completion print."""
+        """Every seeded card's content is visible across the rendered panels."""
         from cert_pepper.cli.flashcards import run_flashcard_session
 
         async with get_session() as session:
@@ -30,11 +119,13 @@ class TestFlashcardSession:
                        side_effect=printed.append):
                 await run_flashcard_session(exam_code="FC01")
 
-        # 3 cards × 2 panels (front + full) + 1 completion message
-        assert len(printed) == 7
+        text = _all_panel_text(printed)
+        for n in (1, 2, 3):
+            assert f"Term {n}" in text
+            assert f"Def {n}" in text
 
     async def test_run_flashcard_session_domain_filter(self, db):
-        """Only cards from the requested domain are shown."""
+        """Only cards from the requested domain are rendered."""
         from cert_pepper.cli.flashcards import run_flashcard_session
 
         async with get_session() as session:
@@ -51,14 +142,12 @@ class TestFlashcardSession:
                        side_effect=printed.append):
                 await run_flashcard_session(exam_code="FC02", domain=1)
 
-        # 1 card × 2 panels + 1 completion
-        assert len(printed) == 3
-        panel_text = str(printed[0].renderable)
-        assert "D1 Def" in panel_text
-        assert "D2 Def" not in panel_text
+        text = _all_panel_text(printed)
+        assert "D1 Def" in text
+        assert "D2 Def" not in text
 
     async def test_run_flashcard_session_category_filter(self, db):
-        """Only cards from the requested category are shown."""
+        """Only cards from the requested category are rendered."""
         from cert_pepper.cli.flashcards import run_flashcard_session
 
         async with get_session() as session:
@@ -75,14 +164,12 @@ class TestFlashcardSession:
                        side_effect=printed.append):
                 await run_flashcard_session(exam_code="FC03", category="Alpha")
 
-        # 1 card × 2 panels + 1 completion
-        assert len(printed) == 3
-        panel_text = str(printed[0].renderable)
-        assert "Cat A Def" in panel_text
-        assert "Cat B Def" not in panel_text
+        text = _all_panel_text(printed)
+        assert "Cat A Def" in text
+        assert "Cat B Def" not in text
 
     async def test_run_flashcard_session_count_cap(self, db):
-        """count=2 with 5 cards shows only 2 cards."""
+        """count=2 with 5 cards shows only 2 distinct cards."""
         from cert_pepper.cli.flashcards import run_flashcard_session
 
         async with get_session() as session:
@@ -98,8 +185,9 @@ class TestFlashcardSession:
                        side_effect=printed.append):
                 await run_flashcard_session(exam_code="FC04", count=2)
 
-        # 2 cards × 2 panels + 1 completion
-        assert len(printed) == 5
+        text = _all_panel_text(printed)
+        shown = sum(1 for i in range(5) if f"Def {i}" in text)
+        assert shown == 2
 
     async def test_run_flashcard_session_no_cards_exits_cleanly(self, db):
         """No flashcards for the cert → single yellow warning, no crash."""
@@ -118,7 +206,7 @@ class TestFlashcardSession:
         assert "No flashcards" in str(printed[0])
 
     async def test_show_answer_single_panel_per_card(self, db):
-        """show_answer=True renders one combined panel per card instead of two."""
+        """show_answer=True renders one combined panel per card (front+back together)."""
         from cert_pepper.cli.flashcards import run_flashcard_session
 
         async with get_session() as session:
@@ -134,8 +222,14 @@ class TestFlashcardSession:
                        side_effect=printed.append):
                 await run_flashcard_session(exam_code="FC08", show_answer=True)
 
-        # 3 cards × 1 panel + 1 completion message
-        assert len(printed) == 4
+        panels = _panel_texts(printed)
+        # 3 cards × 1 combined panel each, and each panel holds front+back together.
+        assert len(panels) == 3
+        for panel_text in panels:
+            assert any(
+                f"Term {ch}" in panel_text and f"Def {ch}" in panel_text
+                for ch in ("A", "B", "C")
+            )
 
     async def test_show_answer_panel_contains_both_sides(self, db):
         """show_answer panel includes both definition and term."""
@@ -144,8 +238,12 @@ class TestFlashcardSession:
         async with get_session() as session:
             cert_id = await seed_certification(session, code="FC09")
             await seed_domains_for_cert(session, cert_id)
-            await seed_flashcard(session, front="CIA Triad", back="Confidentiality Integrity Availability",
-                                 cert_id=cert_id)
+            await seed_flashcard(
+                session,
+                front="CIA Triad",
+                back="Confidentiality Integrity Availability",
+                cert_id=cert_id,
+            )
 
         printed = []
         with patch("cert_pepper.cli.flashcards._getkey", return_value=""):
