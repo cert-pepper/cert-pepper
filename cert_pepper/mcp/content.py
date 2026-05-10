@@ -440,6 +440,35 @@ Return only the bullet list.\
 """
 
 
+async def _generate_text(
+    user_text: str,
+    system_prompt: str,
+    max_tokens: int,
+    ctx: Context[Any, Any, Any] | None = None,
+) -> str:
+    """Generate text via MCP sampling when available, else use the local AI client."""
+    if ctx is not None:
+        result = await ctx.session.create_message(
+            messages=[
+                SamplingMessage(
+                    role="user",
+                    content=TextContent(type="text", text=user_text),
+                )
+            ],
+            system_prompt=system_prompt,
+            max_tokens=max_tokens,
+        )
+        return result.content.text if hasattr(result.content, "text") else str(result.content)
+
+    from cert_pepper.ai.client import generate_text
+
+    return generate_text(
+        system_prompt=system_prompt,
+        user_message=user_text,
+        max_tokens=max_tokens,
+    )
+
+
 def _strip_json_fences(text: str) -> str:
     """Remove optional ```json … ``` fences an LLM may wrap around JSON."""
     text = text.strip()
@@ -565,7 +594,9 @@ async def _fetch_reddit_excerpts(exam_name: str, vendor: str) -> list[str]:
 
 
 async def _build_research_context(
-    exam_name: str, vendor: str, ctx: Context[Any, Any, Any]
+    exam_name: str,
+    vendor: str,
+    ctx: Context[Any, Any, Any] | None = None,
 ) -> str:
     """Synthesize Reddit research into exam insights via MCP sampling.
 
@@ -577,22 +608,15 @@ async def _build_research_context(
             return ""
 
         excerpts_text = "\n\n".join(excerpts)
-        result = await ctx.session.create_message(
-            messages=[
-                SamplingMessage(
-                    role="user",
-                    content=TextContent(
-                        type="text",
-                        text=_RESEARCH_SYNTHESIS_USER.format(
-                            exam_name=exam_name, excerpts_text=excerpts_text
-                        ),
-                    ),
-                )
-            ],
+        bullets = await _generate_text(
+            user_text=_RESEARCH_SYNTHESIS_USER.format(
+                exam_name=exam_name,
+                excerpts_text=excerpts_text,
+            ),
             system_prompt=_RESEARCH_SYNTHESIS_SYSTEM,
             max_tokens=512,
+            ctx=ctx,
         )
-        bullets = result.content.text if hasattr(result.content, "text") else str(result.content)
         header = (
             "\nCommunity exam insights"
             " (incorporate these into question difficulty and distractors):\n"
@@ -668,27 +692,16 @@ async def setup_exam(
                 "question_count": question_count,
             })
 
-    # ── Exam not found — generate via MCP sampling ───────────────────────────
+    # ── Exam not found — generate via MCP sampling or local AI ───────────────
 
     # Step 1: generate exam config
-    config_result = await ctx.session.create_message(
-        messages=[
-            SamplingMessage(
-                role="user",
-                content=TextContent(
-                    type="text",
-                    text=_EXAM_CONFIG_USER.format(exam_name=exam_name),
-                ),
-            )
-        ],
+    raw_config = await _generate_text(
+        user_text=_EXAM_CONFIG_USER.format(exam_name=exam_name),
         system_prompt=_EXAM_CONFIG_SYSTEM,
         max_tokens=1024,
+        ctx=ctx,
     )
-    raw_json = _strip_json_fences(
-        config_result.content.text
-        if hasattr(config_result.content, "text")
-        else str(config_result.content)
-    )
+    raw_json = _strip_json_fences(raw_config)
 
     try:
         config_data = json.loads(raw_json)
@@ -715,9 +728,6 @@ async def setup_exam(
         return json.dumps({"error": f"Invalid exam config structure: {exc}", "raw": raw_json})
 
     # Step 2: insert config, then generate questions domain by domain
-    if ctx is None:
-        return json.dumps({"error": "setup_exam requires MCP context for new exam generation"})
-
     generation_plan = _build_generation_plan(exam_config.domains, resolved_size)
     research_context = await _build_research_context(exam_config.name, exam_config.vendor, ctx)
 
@@ -730,35 +740,23 @@ async def setup_exam(
             for start, end in _build_question_batches(target_domain_questions):
                 batch_size = end - start + 1
 
-                q_result = await ctx.session.create_message(
-                    messages=[
-                        SamplingMessage(
-                            role="user",
-                            content=TextContent(
-                                type="text",
-                                text=_QUESTIONS_USER.format(
-                                    n=batch_size,
-                                    start=start,
-                                    end=end,
-                                    exam_name=exam_config.name,
-                                    size=generation_plan.size,
-                                    domain_number=domain.number,
-                                    domain_name=domain.name,
-                                    target_domain_questions=target_domain_questions,
-                                    target_total_questions=generation_plan.total_questions,
-                                    weight_pct=domain.weight_pct,
-                                    research_context=research_context,
-                                ),
-                            ),
-                        )
-                    ],
+                raw_text = await _generate_text(
+                    user_text=_QUESTIONS_USER.format(
+                        n=batch_size,
+                        start=start,
+                        end=end,
+                        exam_name=exam_config.name,
+                        size=generation_plan.size,
+                        domain_number=domain.number,
+                        domain_name=domain.name,
+                        target_domain_questions=target_domain_questions,
+                        target_total_questions=generation_plan.total_questions,
+                        weight_pct=domain.weight_pct,
+                        research_context=research_context,
+                    ),
                     system_prompt=_QUESTIONS_SYSTEM.format(n=batch_size),
                     max_tokens=8192,
-                )
-                raw_text = (
-                    q_result.content.text
-                    if hasattr(q_result.content, "text")
-                    else str(q_result.content)
+                    ctx=ctx,
                 )
                 parsed = parse_questions_text(raw_text, domain_number=domain.number)
                 inserted = await ingest_questions(db, parsed, cert_id=cert_id)

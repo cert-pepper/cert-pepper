@@ -80,6 +80,33 @@ def generate_explanation(
     return content, tokens, cache_hit
 
 
+def generate_text(
+    system_prompt: str,
+    user_message: str,
+    model: str | None = None,
+    max_tokens: int = 1024,
+) -> str:
+    """Generate arbitrary text using the Anthropic API."""
+    settings = get_settings()
+    if model is None:
+        model = settings.sonnet_model
+
+    client = get_client()
+    response = client.messages.create(
+        model=model,
+        max_tokens=max_tokens,
+        system=system_prompt,
+        messages=[{"role": "user", "content": user_message}],
+    )
+
+    for block in response.content:
+        text = getattr(block, "text", None)
+        if text:
+            return text
+
+    return str(response.content)
+
+
 def generate_hint(question_stem: str, options: dict[str, str], model: str | None = None) -> str:
     """Generate a one-sentence hint for a question."""
     from cert_pepper.ai.prompts import get_hint_system

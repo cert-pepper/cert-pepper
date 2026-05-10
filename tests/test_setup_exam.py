@@ -8,6 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
 import pytest
+from sqlalchemy import text
 
 from cert_pepper.ingestion.questions import parse_questions_text
 
@@ -222,6 +223,63 @@ class TestSetupExamExisting:
         assert result["size"] == "lite"
         assert result["question_count"] == 1
         ctx.session.create_message.assert_not_called()
+
+
+class TestSetupExamLocalFallback:
+    async def test_new_exam_generation_works_without_mcp_context(self, db):
+        from cert_pepper.db.connection import get_session
+        from cert_pepper.mcp.content import setup_exam
+
+        def _mock_response(text: str) -> MagicMock:
+            response = MagicMock()
+            response.content = [MagicMock(text=text)]
+            return response
+
+        exam_config_json = json.dumps({
+            "code": "LOCAL-101",
+            "name": "Local Exam 101",
+            "vendor": "Local Vendor",
+            "passing_score": 700,
+            "max_score": 900,
+            "domains": [
+                {"number": 1, "name": "Domain 1", "weight_pct": 50.0},
+                {"number": 2, "name": "Domain 2", "weight_pct": 50.0},
+                {"number": 3, "name": "Domain 3", "weight_pct": 0.0},
+            ],
+        })
+        question_batch_md = SAMPLE_QUESTIONS_MD
+
+        mock_client = MagicMock()
+        mock_client.messages.create.side_effect = [
+            _mock_response(exam_config_json),
+            _mock_response(question_batch_md),
+            _mock_response(question_batch_md),
+            _mock_response(question_batch_md),
+        ]
+
+        with (
+            patch("cert_pepper.ai.client.get_client", return_value=mock_client),
+            patch("cert_pepper.mcp.content._fetch_reddit_excerpts", return_value=[]),
+        ):
+            result_str = await setup_exam("Local Exam 101", size="lite", ctx=None)
+
+        result = json.loads(result_str)
+
+        assert result["status"] == "created"
+        assert result["exam_code"] == "LOCAL-101"
+        assert result["size"] == "lite"
+        assert result["question_count"] == 6
+        assert mock_client.messages.create.call_count == 4
+
+        async with get_session() as session:
+            cert = await session.execute(
+                text("SELECT code, name FROM certifications WHERE code = 'LOCAL-101'")
+            )
+            row = cert.fetchone()
+
+        assert row is not None
+        assert row[0] == "LOCAL-101"
+        assert row[1] == "Local Exam 101"
 
 
 class TestSetupExamPlanning:
