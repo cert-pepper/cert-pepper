@@ -46,7 +46,7 @@ uv run cert-pepper study
 
 Or open the repo in **Claude Code** and ask it to generate a question bank for any exam:
 
-> Set up a question bank for the CISSP exam
+> Set up a `standard` question bank for the CISSP exam
 
 See [MCP Integration](#mcp-integration) to enable the servers.
 

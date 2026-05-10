@@ -7,6 +7,7 @@ delegate AI calls to the MCP client — no ANTHROPIC_API_KEY required.
 from __future__ import annotations
 
 import json
+from dataclasses import dataclass
 from typing import Any
 
 import httpx
@@ -18,6 +19,21 @@ from cert_pepper.db.connection import get_session, init_db
 from cert_pepper.models.content import Question
 
 mcp = FastMCP("cert-pepper-content")
+
+
+@dataclass(frozen=True)
+class _ExamSizeTier:
+    per_domain_floor: int
+    minimum_total_questions: int
+
+
+@dataclass(frozen=True)
+class _GenerationPlan:
+    size: str
+    per_domain_floor: int
+    minimum_total_questions: int
+    total_questions: int
+    domain_question_counts: dict[int, int]
 
 
 async def _load_question(db: AsyncSession, question_id: int) -> Question | None:
@@ -316,8 +332,13 @@ async def acronym_list() -> str:
     return json.dumps(data)
 
 
-_BATCHES_PER_DOMAIN = 3
 _QUESTIONS_PER_BATCH = 30
+_DEFAULT_EXAM_SIZE = "standard"
+_EXAM_SIZE_TIERS: dict[str, _ExamSizeTier] = {
+    "lite": _ExamSizeTier(per_domain_floor=20, minimum_total_questions=60),
+    "standard": _ExamSizeTier(per_domain_floor=50, minimum_total_questions=150),
+    "heavy": _ExamSizeTier(per_domain_floor=100, minimum_total_questions=500),
+}
 
 _EXAM_CONFIG_SYSTEM = """\
 You are a certification exam expert. Return ONLY valid JSON with no markdown fencing, \
@@ -377,6 +398,9 @@ _QUESTIONS_USER = """\
 Generate {n} practice questions (Q{start} through Q{end}) for:
   Exam:   {exam_name}
   Domain {domain_number}: {domain_name} ({weight_pct}% of exam)
+  Requested bank size: {size}
+  Target questions for this domain: {target_domain_questions}
+  Target total questions for this exam: {target_total_questions}
 {research_context}
 Focus on realistic exam-difficulty scenarios covering the full breadth of this domain.\
 """
@@ -424,6 +448,79 @@ def _strip_json_fences(text: str) -> str:
         # drop first line (```json or ```) and last line (```)
         text = "\n".join(lines[1:-1]).strip()
     return text
+
+
+def _normalize_exam_size(size: str | None) -> str:
+    """Normalize an optional size tier, defaulting to standard."""
+    if size is None or not size.strip():
+        return _DEFAULT_EXAM_SIZE
+
+    normalized = size.strip().lower()
+    if normalized not in _EXAM_SIZE_TIERS:
+        options = ", ".join(_EXAM_SIZE_TIERS)
+        raise ValueError(f"Invalid size '{size}'. Valid options: {options}")
+    return normalized
+
+
+def _distribute_remainder_by_weight(
+    remainder: int, domains: list[Any]
+) -> dict[int, int]:
+    """Distribute extra questions by domain weight using largest remainders."""
+    if remainder <= 0:
+        return {int(domain.number): 0 for domain in domains}
+
+    raw_shares: list[tuple[float, int]] = []
+    allocated: dict[int, int] = {}
+    used = 0
+
+    for domain in domains:
+        exact = remainder * (float(domain.weight_pct) / 100.0)
+        whole = int(exact)
+        domain_number = int(domain.number)
+        raw_shares.append((exact - whole, domain_number))
+        allocated[domain_number] = whole
+        used += whole
+
+    for _, domain_number in sorted(raw_shares, key=lambda item: (-item[0], item[1])):
+        if used >= remainder:
+            break
+        allocated[domain_number] += 1
+        used += 1
+
+    return allocated
+
+
+def _build_generation_plan(domains: list[Any], size: str | None) -> _GenerationPlan:
+    """Resolve size tier into concrete per-domain and total targets."""
+    resolved_size = _normalize_exam_size(size)
+    tier = _EXAM_SIZE_TIERS[resolved_size]
+
+    domain_counts = {int(domain.number): tier.per_domain_floor for domain in domains}
+    remainder = max(0, tier.minimum_total_questions - sum(domain_counts.values()))
+
+    for domain_number, extra in _distribute_remainder_by_weight(remainder, domains).items():
+        domain_counts[domain_number] += extra
+
+    return _GenerationPlan(
+        size=resolved_size,
+        per_domain_floor=tier.per_domain_floor,
+        minimum_total_questions=tier.minimum_total_questions,
+        total_questions=sum(domain_counts.values()),
+        domain_question_counts=domain_counts,
+    )
+
+
+def _build_question_batches(
+    total_questions: int, batch_size: int = _QUESTIONS_PER_BATCH
+) -> list[tuple[int, int]]:
+    """Return inclusive question-number ranges for a domain's generation batches."""
+    batches: list[tuple[int, int]] = []
+    start = 1
+    while start <= total_questions:
+        end = min(start + batch_size - 1, total_questions)
+        batches.append((start, end))
+        start = end + 1
+    return batches
 
 
 async def _fetch_reddit_excerpts(exam_name: str, vendor: str) -> list[str]:
@@ -506,23 +603,31 @@ async def _build_research_context(
 
 
 @mcp.tool()
-async def setup_exam(exam_name: str, ctx: Context[Any, Any, Any]) -> str:
+async def setup_exam(
+    exam_name: str, size: str | None = None, ctx: Context[Any, Any, Any] | None = None
+) -> str:
     """Prepare a full question bank for an exam.
 
     Checks if the exam already exists in the DB. If it does, returns a
     ready status with question count. If not, uses MCP sampling to:
     1. Generate the exam structure (code, name, vendor, domains + weights)
-    2. Generate ~90 practice questions per domain in batches of 30
+    2. Generate a tier-sized practice bank in batches of 30
     3. Insert everything into the DB
 
     exam_name: Natural language exam name, e.g. "CompTIA Security+ SY0-701",
                "CISSP", "AWS Solutions Architect Associate"
+    size: Optional bank size tier: lite, standard, or heavy. Defaults to standard.
     """
     from sqlalchemy import text as sql_text
 
     from cert_pepper.ingestion.loader import ingest_exam_config, ingest_questions
     from cert_pepper.ingestion.questions import parse_questions_text
     from cert_pepper.models.content import ExamConfig, ExamDomain
+
+    try:
+        resolved_size = _normalize_exam_size(size)
+    except ValueError as exc:
+        return json.dumps({"error": str(exc)})
 
     q = f"%{exam_name}%"
 
@@ -552,6 +657,7 @@ async def setup_exam(exam_name: str, ctx: Context[Any, Any, Any]) -> str:
                 "status": "ready",
                 "exam_code": exam_code,
                 "exam_name": exam_full_name,
+                "size": resolved_size,
                 "question_count": question_count,
             })
 
@@ -602,6 +708,10 @@ async def setup_exam(exam_name: str, ctx: Context[Any, Any, Any]) -> str:
         return json.dumps({"error": f"Invalid exam config structure: {exc}", "raw": raw_json})
 
     # Step 2: insert config, then generate questions domain by domain
+    if ctx is None:
+        return json.dumps({"error": "setup_exam requires MCP context for new exam generation"})
+
+    generation_plan = _build_generation_plan(exam_config.domains, resolved_size)
     research_context = await _build_research_context(exam_config.name, exam_config.vendor, ctx)
 
     total_inserted = 0
@@ -609,9 +719,9 @@ async def setup_exam(exam_name: str, ctx: Context[Any, Any, Any]) -> str:
         cert_id = await ingest_exam_config(db, exam_config)
 
         for domain in exam_config.domains:
-            for batch_idx in range(_BATCHES_PER_DOMAIN):
-                start = batch_idx * _QUESTIONS_PER_BATCH + 1
-                end = start + _QUESTIONS_PER_BATCH - 1
+            target_domain_questions = generation_plan.domain_question_counts[domain.number]
+            for start, end in _build_question_batches(target_domain_questions):
+                batch_size = end - start + 1
 
                 q_result = await ctx.session.create_message(
                     messages=[
@@ -620,19 +730,22 @@ async def setup_exam(exam_name: str, ctx: Context[Any, Any, Any]) -> str:
                             content=TextContent(
                                 type="text",
                                 text=_QUESTIONS_USER.format(
-                                    n=_QUESTIONS_PER_BATCH,
+                                    n=batch_size,
                                     start=start,
                                     end=end,
                                     exam_name=exam_config.name,
+                                    size=generation_plan.size,
                                     domain_number=domain.number,
                                     domain_name=domain.name,
+                                    target_domain_questions=target_domain_questions,
+                                    target_total_questions=generation_plan.total_questions,
                                     weight_pct=domain.weight_pct,
                                     research_context=research_context,
                                 ),
                             ),
                         )
                     ],
-                    system_prompt=_QUESTIONS_SYSTEM.format(n=_QUESTIONS_PER_BATCH),
+                    system_prompt=_QUESTIONS_SYSTEM.format(n=batch_size),
                     max_tokens=8192,
                 )
                 raw_text = (
@@ -648,9 +761,16 @@ async def setup_exam(exam_name: str, ctx: Context[Any, Any, Any]) -> str:
         "status": "created",
         "exam_code": exam_config.code,
         "exam_name": exam_config.name,
+        "size": generation_plan.size,
         "question_count": total_inserted,
+        "target_question_count": generation_plan.total_questions,
         "domains": [
-            {"number": d.number, "name": d.name, "weight_pct": d.weight_pct}
+            {
+                "number": d.number,
+                "name": d.name,
+                "weight_pct": d.weight_pct,
+                "target_questions": generation_plan.domain_question_counts[d.number],
+            }
             for d in exam_config.domains
         ],
     })

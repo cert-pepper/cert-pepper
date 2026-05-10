@@ -146,12 +146,13 @@ class TestSetupExamExisting:
         ctx = MagicMock()
         ctx.session = AsyncMock()
 
-        result_str = await setup_exam("CISSP", ctx)
+        result_str = await setup_exam("CISSP", ctx=ctx)
         result = json.loads(result_str)
 
         assert result["status"] == "ready"
         assert result["exam_code"] == "CISSP"
         assert result["question_count"] == 1
+        assert result["size"] == "standard"
         ctx.session.create_message.assert_not_called()
 
     async def test_partial_name_match(self, db):
@@ -174,11 +175,79 @@ class TestSetupExamExisting:
         ctx = MagicMock()
         ctx.session = AsyncMock()
 
-        result_str = await setup_exam("Security+", ctx)
+        result_str = await setup_exam("Security+", size="heavy", ctx=ctx)
         result = json.loads(result_str)
 
         assert result["status"] == "ready"
         assert result["exam_code"] == "SY0-701"
+        assert result["size"] == "heavy"
+
+    async def test_invalid_size_returns_error(self, db):
+        from cert_pepper.mcp.content import setup_exam
+
+        ctx = MagicMock()
+        ctx.session = AsyncMock()
+
+        result_str = await setup_exam("CISSP", size="med", ctx=ctx)
+        result = json.loads(result_str)
+
+        assert "error" in result
+        assert "lite" in result["error"]
+        assert "standard" in result["error"]
+        assert "heavy" in result["error"]
+        ctx.session.create_message.assert_not_called()
+
+
+class TestSetupExamPlanning:
+    def test_normalize_size_defaults_to_standard(self):
+        from cert_pepper.mcp.content import _normalize_exam_size
+
+        assert _normalize_exam_size(None) == "standard"
+        assert _normalize_exam_size("") == "standard"
+
+    def test_normalize_size_rejects_invalid_value(self):
+        from cert_pepper.mcp.content import _normalize_exam_size
+
+        with pytest.raises(ValueError, match="Invalid size"):
+            _normalize_exam_size("ultra")
+
+    def test_build_generation_plan_uses_per_domain_floors(self):
+        from cert_pepper.mcp.content import _build_generation_plan
+        from cert_pepper.models.content import ExamDomain
+
+        domains = [
+            ExamDomain(number=1, name="Domain 1", weight_pct=60.0),
+            ExamDomain(number=2, name="Domain 2", weight_pct=40.0),
+        ]
+
+        plan = _build_generation_plan(domains, "standard")
+
+        assert plan.size == "standard"
+        assert plan.minimum_total_questions == 150
+        assert plan.total_questions == 150
+        assert plan.domain_question_counts == {1: 80, 2: 70}
+
+    def test_build_generation_plan_keeps_floor_total_when_above_minimum(self):
+        from cert_pepper.mcp.content import _build_generation_plan
+        from cert_pepper.models.content import ExamDomain
+
+        domains = [
+            ExamDomain(number=1, name="Domain 1", weight_pct=20.0),
+            ExamDomain(number=2, name="Domain 2", weight_pct=20.0),
+            ExamDomain(number=3, name="Domain 3", weight_pct=20.0),
+            ExamDomain(number=4, name="Domain 4", weight_pct=20.0),
+            ExamDomain(number=5, name="Domain 5", weight_pct=20.0),
+        ]
+
+        plan = _build_generation_plan(domains, "standard")
+
+        assert plan.total_questions == 250
+        assert all(count == 50 for count in plan.domain_question_counts.values())
+
+    def test_build_question_batches_covers_non_multiple_of_batch_size(self):
+        from cert_pepper.mcp.content import _build_question_batches
+
+        assert _build_question_batches(100) == [(1, 30), (31, 60), (61, 90), (91, 100)]
 
 
 # ── helpers for mocking httpx AsyncClient ──────────────────────────────────────
@@ -377,8 +446,11 @@ class TestBuildResearchContext:
             start=1,
             end=30,
             exam_name="CISSP",
+            size="standard",
             domain_number=1,
             domain_name="Security and Risk Management",
+            target_domain_questions=50,
+            target_total_questions=150,
             weight_pct=15.0,
             research_context=research_context,
         )
@@ -392,8 +464,11 @@ class TestBuildResearchContext:
             start=1,
             end=30,
             exam_name="CISSP",
+            size="standard",
             domain_number=1,
             domain_name="Security and Risk Management",
+            target_domain_questions=50,
+            target_total_questions=150,
             weight_pct=15.0,
             research_context="",
         )

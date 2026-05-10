@@ -52,7 +52,7 @@ uv sync
 Open the repo in Claude Code. MCP servers start automatically (`.mcp.json` is already configured). Then ask Claude to set up your question bank:
 
 ```
-Set up a question bank for CompTIA Security+ SY0-701
+Set up a standard question bank for CompTIA Security+ SY0-701
 ```
 
 Claude sets up the database and confirms when it's ready.
