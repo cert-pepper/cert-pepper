@@ -55,6 +55,8 @@ Open the repo in Claude Code. MCP servers start automatically (`.mcp.json` is al
 Set up a standard question bank for CompTIA Security+ SY0-701
 ```
 
+Claude should satisfy that request by calling the content MCP server's `create_question_bank` workflow. That creates or reuses a DB-backed question bank; it does not author a new local content pack under `examples/` unless you explicitly ask for repository content files.
+
 Claude sets up the database and confirms when it's ready.
 
 Verify everything loaded:

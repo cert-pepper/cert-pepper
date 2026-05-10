@@ -1,13 +1,84 @@
-"""Tests for get_session_wrong_answers MCP tool (TDD)."""
+"""Tests for study-engine MCP tools (TDD)."""
 
 from __future__ import annotations
 
 import json
 
-import pytest
 from sqlalchemy import text
 
 from tests.conftest import get_user_id, seed_question
+
+
+class TestStudySessionReconnect:
+    async def test_submit_answer_recovers_persisted_session_after_memory_loss(self, db):
+        from cert_pepper.db.connection import get_session
+        from cert_pepper.mcp.study_engine import _sessions, start_session, submit_answer
+        from tests.conftest import seed_question
+
+        async with get_session() as session:
+            question_id = await seed_question(
+                session, domain_number=4, number=1, correct_answer="A"
+            )
+
+        session_data = json.loads(await start_session(session_type="study"))
+        session_id = session_data["session_id"]
+        db_session_id = int(session_id.removeprefix("sess_"))
+
+        _sessions.clear()
+
+        result = json.loads(await submit_answer(session_id, question_id=question_id, answer="A"))
+
+        assert "error" not in result
+
+        from cert_pepper.db.connection import get_session
+
+        async with get_session() as session:
+            attempt = await session.execute(
+                text(
+                    "SELECT session_id, question_id, selected_answer"
+                    " FROM question_attempts ORDER BY id DESC LIMIT 1"
+                )
+            )
+            row = attempt.fetchone()
+
+        assert row is not None
+        assert row[0] == db_session_id
+        assert row[1] == question_id
+        assert row[2] == "A"
+
+    async def test_get_next_question_preserves_new_only_after_memory_loss(self, db):
+        from cert_pepper.db.connection import get_session
+        from cert_pepper.mcp.study_engine import _sessions, get_next_question, start_session
+        from tests.conftest import get_user_id, seed_question
+
+        async with get_session() as session:
+            user_id = await get_user_id(session)
+            unseen_question_id = await seed_question(
+                session, domain_number=4, number=1, stem="Unseen question?", correct_answer="B"
+            )
+            seen_question_id = await seed_question(
+                session, domain_number=4, number=2, stem="Seen question?", correct_answer="C"
+            )
+            await session.execute(
+                text("""
+                    INSERT INTO fsrs_cards
+                        (user_id, content_type, content_id, stability, difficulty, retrievability,
+                         due_date, last_review, state, step, reps, lapses)
+                    VALUES (:uid, 'question', :qid, 1.0, 5.0, 0.9,
+                            CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 'review', 0, 1, 0)
+                """),
+                {"uid": user_id, "qid": seen_question_id},
+            )
+
+        session_data = json.loads(await start_session(session_type="study", new_only=True))
+        session_id = session_data["session_id"]
+
+        _sessions.clear()
+
+        result = json.loads(await get_next_question(session_id))
+
+        assert "error" not in result
+        assert result["question_id"] == unseen_question_id
 
 
 class TestGetSessionWrongAnswers:

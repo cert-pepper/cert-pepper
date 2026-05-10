@@ -48,6 +48,8 @@ Or open the repo in **Claude Code** and ask it to generate a question bank for a
 
 > Set up a `standard` question bank for the CISSP exam
 
+That request should map to the content MCP server's `create_question_bank` workflow. It creates or reuses a DB-backed question bank; it does not create a new `examples/` content pack unless you explicitly ask for repository content files.
+
 See [MCP Integration](#mcp-integration) to enable the servers.
 
 ## Why CertPepper?
@@ -90,6 +92,13 @@ Three STDIO MCP servers are registered in `.mcp.json`:
 Enable them in Claude Code by adding `enableAllProjectMcpServers: true` to `.claude/settings.local.json`.
 
 In Claude Code, explanations use MCP sampling — no `ANTHROPIC_API_KEY` needed.
+
+For exam setup, the content server exposes two equivalent tools:
+
+- `create_question_bank(exam_name, size=None)` — preferred user-facing entrypoint
+- `setup_exam(exam_name, size=None)` — lower-level alias with the same behavior
+
+Both tools accept size tiers `lite`, `standard`, and `heavy`. They create or reuse DB-backed question banks rather than writing content under `examples/`.
 
 ## Adding Your Own Exam
 

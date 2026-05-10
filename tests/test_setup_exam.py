@@ -11,7 +11,6 @@ import pytest
 
 from cert_pepper.ingestion.questions import parse_questions_text
 
-
 SAMPLE_QUESTIONS_MD = textwrap.dedent("""\
     **Q1.** What does CIA stand for?
 
@@ -195,6 +194,33 @@ class TestSetupExamExisting:
         assert "lite" in result["error"]
         assert "standard" in result["error"]
         assert "heavy" in result["error"]
+        ctx.session.create_message.assert_not_called()
+
+    async def test_create_question_bank_alias_returns_ready(self, db):
+        """create_question_bank should mirror setup_exam for natural-language requests."""
+        from cert_pepper.db.connection import get_session
+        from cert_pepper.mcp.content import create_question_bank
+        from tests.conftest import seed_certification, seed_domains_for_cert, seed_question
+
+        async with get_session() as session:
+            cert_id = await seed_certification(
+                session, code="AL-PERMIT", name="Alabama Driver Permit Test", vendor="ADECA"
+            )
+            await seed_domains_for_cert(
+                session, cert_id, [(1, "Rules of the Road", 50.0), (2, "Signs", 50.0)]
+            )
+            await seed_question(session, domain_number=1, number=1, cert_id=cert_id)
+
+        ctx = MagicMock()
+        ctx.session = AsyncMock()
+
+        result_str = await create_question_bank("Alabama Driver Permit Test", size="lite", ctx=ctx)
+        result = json.loads(result_str)
+
+        assert result["status"] == "ready"
+        assert result["exam_code"] == "AL-PERMIT"
+        assert result["size"] == "lite"
+        assert result["question_count"] == 1
         ctx.session.create_message.assert_not_called()
 
 

@@ -60,6 +60,50 @@ async def _get_question(session: AsyncSession, question_id: int) -> Question | N
     )
 
 
+def _parse_session_id(session_id: str) -> int | None:
+    """Extract the DB session id from a public MCP session id."""
+    if not session_id.startswith("sess_"):
+        return None
+    try:
+        return int(session_id.removeprefix("sess_"))
+    except ValueError:
+        return None
+
+
+async def _load_persisted_session(
+    session: AsyncSession, session_id: str, user_id: int
+) -> dict[str, Any] | None:
+    """Load persisted session metadata for reconnect-safe MCP operations."""
+    from sqlalchemy import text
+
+    db_session_id = _parse_session_id(session_id)
+    if db_session_id is None:
+        return None
+
+    result = await session.execute(
+        text("""
+            SELECT id, session_type, domain_filter, certification_id, new_only,
+                   questions_seen, questions_correct
+            FROM study_sessions
+            WHERE id = :sid AND user_id = :uid
+        """),
+        {"sid": db_session_id, "uid": user_id},
+    )
+    row = result.fetchone()
+    if not row:
+        return None
+
+    return {
+        "db_id": int(row[0]),
+        "type": row[1],
+        "domain_filter": row[2],
+        "cert_id": row[3],
+        "new_only": bool(row[4]),
+        "questions_seen": row[5] or 0,
+        "questions_correct": row[6] or 0,
+    }
+
+
 @mcp.tool()
 async def start_session(
     session_type: str = "study",
@@ -89,10 +133,16 @@ async def start_session(
         await db.execute(
             text(
                 "INSERT INTO study_sessions"
-                " (user_id, session_type, domain_filter, certification_id)"
-                " VALUES (:uid, :type, :domain, :cert_id)"
+                " (user_id, session_type, domain_filter, certification_id, new_only)"
+                " VALUES (:uid, :type, :domain, :cert_id, :new_only)"
             ),
-            {"uid": user_id, "type": session_type, "domain": domain_filter, "cert_id": cert_id},
+            {
+                "uid": user_id,
+                "type": session_type,
+                "domain": domain_filter,
+                "cert_id": cert_id,
+                "new_only": 1 if new_only else 0,
+            },
         )
         result = await db.execute(text("SELECT last_insert_rowid()"))
         id_row = result.fetchone()
@@ -122,13 +172,18 @@ async def start_session(
 @mcp.tool()
 async def get_next_question(session_id: str) -> str:
     """Get the next question for a study session. Uses adaptive selection."""
-    sess = _sessions.get(session_id, {})
-    domain_filter = sess.get("domain_filter")
-    cert_id = sess.get("cert_id")
-    new_only = sess.get("new_only", False)
-
     async with get_session() as db:
         user_id = await _get_user_id(db)
+        sess = _sessions.get(session_id)
+        if sess is None:
+            sess = await _load_persisted_session(db, session_id, user_id)
+            if sess is None:
+                return json.dumps({"error": f"Session {session_id} not found."})
+            _sessions[session_id] = dict(sess)
+
+        domain_filter = sess.get("domain_filter")
+        cert_id = sess.get("cert_id")
+        new_only = sess.get("new_only", False)
         question_id = await selector.select_question(
             db, user_id, domain_filter=domain_filter, cert_id=cert_id, new_only=new_only
         )
@@ -170,6 +225,13 @@ async def submit_answer(
 
     async with get_session() as db:
         user_id = await _get_user_id(db)
+        sess = _sessions.get(session_id)
+        if sess is None:
+            sess = await _load_persisted_session(db, session_id, user_id)
+            if sess is None:
+                return json.dumps({"error": f"Session {session_id} not found."})
+            _sessions[session_id] = dict(sess)
+
         q = await _get_question(db, question_id)
         if q is None:
             return json.dumps({"error": "Question not found."})
@@ -231,8 +293,7 @@ async def submit_answer(
         )
 
         # Record attempt
-        sess = _sessions.get(session_id, {})
-        sess_db_id = sess.get("db_id", 0)
+        sess_db_id = sess["db_id"]
         await db.execute(
             text("""
                 INSERT INTO question_attempts
@@ -250,14 +311,21 @@ async def submit_answer(
             },
         )
 
-        if session_id in _sessions:
-            _sessions[session_id]["questions_seen"] = (
-                _sessions[session_id].get("questions_seen", 0) + 1
-            )
-            if is_correct:
-                _sessions[session_id]["questions_correct"] = (
-                    _sessions[session_id].get("questions_correct", 0) + 1
-                )
+        await db.execute(
+            text("""
+                UPDATE study_sessions SET
+                    questions_seen = questions_seen + 1,
+                    questions_correct = questions_correct + :correct_inc
+                WHERE id = :sid
+            """),
+            {"sid": sess_db_id, "correct_inc": 1 if is_correct else 0},
+        )
+
+        _sessions[session_id]["questions_seen"] = sess.get("questions_seen", 0) + 1
+        if is_correct:
+            _sessions[session_id]["questions_correct"] = sess.get("questions_correct", 0) + 1
+        else:
+            _sessions[session_id]["questions_correct"] = sess.get("questions_correct", 0)
 
     result_data: dict[str, Any] = {
         "correct": is_correct,
@@ -334,12 +402,17 @@ async def end_session(session_id: str) -> str:
     """End a study session and get a summary."""
     from sqlalchemy import text
 
-    sess = _sessions.pop(session_id, {})
-    sess_db_id = sess.get("db_id", 0)
-    seen = sess.get("questions_seen", 0)
-    correct = sess.get("questions_correct", 0)
-
     async with get_session() as db:
+        user_id = await _get_user_id(db)
+        sess = _sessions.pop(session_id, None)
+        if sess is None:
+            sess = await _load_persisted_session(db, session_id, user_id)
+            if sess is None:
+                return json.dumps({"error": f"Session {session_id} not found."})
+
+        sess_db_id = sess["db_id"]
+        seen = sess.get("questions_seen", 0)
+        correct = sess.get("questions_correct", 0)
         await db.execute(
             text("""
                 UPDATE study_sessions SET

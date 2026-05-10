@@ -26,6 +26,16 @@ cert-pepper/
 
 All development happens in `cert_pepper/` and `tests/`. Content under `examples/` is never modified by the app — it is read-only input.
 
+## Question Bank Requests
+
+When a user asks to set up, create, or generate a question bank for an exam, use the MCP content server's generation workflow rather than authoring a new local content pack.
+
+- Preferred MCP tool: `create_question_bank(exam_name, size=None, ctx=None)`
+- Equivalent lower-level tool: `setup_exam(exam_name, size=None, ctx=None)`
+- Size tiers: `lite`, `standard`, `heavy`
+- This workflow creates or reuses a DB-backed question bank.
+- Do not create files under `examples/` unless the user explicitly asks for a repository content pack or markdown source files.
+
 ## TDD Red-Green Workflow (Required)
 
 **Every piece of code written in this repo must follow TDD red-green:**

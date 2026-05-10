@@ -113,6 +113,10 @@ async def _run_migrations() -> list[str]:
             "ALTER TABLE study_sessions ADD COLUMN certification_id INTEGER REFERENCES certifications(id)",  # noqa: E501
         ),
         (
+            "add new_only to study_sessions",
+            "ALTER TABLE study_sessions ADD COLUMN new_only INTEGER NOT NULL DEFAULT 0",
+        ),
+        (
             "add certification_id to predicted_scores",
             "ALTER TABLE predicted_scores ADD COLUMN certification_id INTEGER REFERENCES certifications(id)",  # noqa: E501
         ),

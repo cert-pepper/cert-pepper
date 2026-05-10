@@ -107,6 +107,7 @@ CREATE TABLE IF NOT EXISTS study_sessions (
     user_id          INTEGER NOT NULL REFERENCES users(id),
     session_type     TEXT NOT NULL,
     domain_filter    INTEGER,
+    new_only         INTEGER NOT NULL DEFAULT 0,
     started_at       DATETIME DEFAULT CURRENT_TIMESTAMP,
     ended_at         DATETIME,
     questions_seen   INTEGER NOT NULL DEFAULT 0,

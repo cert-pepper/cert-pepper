@@ -617,6 +617,13 @@ async def setup_exam(
     exam_name: Natural language exam name, e.g. "CompTIA Security+ SY0-701",
                "CISSP", "AWS Solutions Architect Associate"
     size: Optional bank size tier: lite, standard, or heavy. Defaults to standard.
+
+    This is the core MCP entrypoint behind requests like:
+    - "Set up a question bank for the CISSP exam"
+    - "Create a lite question bank for the Alabama driver's permit test"
+
+    Use this generation workflow for DB-backed exam setup. Do not author a new
+    `examples/` content pack unless the caller explicitly asks for local content files.
     """
     from sqlalchemy import text as sql_text
 
@@ -774,6 +781,19 @@ async def setup_exam(
             for d in exam_config.domains
         ],
     })
+
+
+@mcp.tool()
+async def create_question_bank(
+    exam_name: str, size: str | None = None, ctx: Context[Any, Any, Any] | None = None
+) -> str:
+    """Create or reuse a DB-backed question bank for a named exam.
+
+    This alias exists so agents can map user phrasing directly to the MCP tool.
+    It delegates to `setup_exam` and uses the same size tiers: lite, standard,
+    and heavy.
+    """
+    return await setup_exam(exam_name=exam_name, size=size, ctx=ctx)
 
 
 def serve() -> None:
