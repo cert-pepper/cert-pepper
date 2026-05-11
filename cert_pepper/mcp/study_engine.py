@@ -114,14 +114,28 @@ async def start_session(
     """Start a new study session. Returns session_id."""
     from sqlalchemy import text
 
-    from cert_pepper.db.exams import resolve_cert_id
+    from cert_pepper.db.exams import resolve_exam_selection
 
     async with get_session() as db:
         user_id = await _get_user_id(db)
         try:
-            cert_id = await resolve_cert_id(db, exam_code)
+            selection = await resolve_exam_selection(db, exam_code)
         except ValueError as e:
             return json.dumps({"error": str(e)})
+
+        if selection.status == "selection_required":
+            return json.dumps({
+                "status": "selection_required",
+                "message": "Multiple exams found. Choose one and retry with exam_code.",
+                "options": [
+                    {"code": option.code, "name": option.name}
+                    for option in selection.options
+                ],
+            })
+
+        cert_id = selection.cert_id
+        if cert_id is None:
+            return json.dumps({"error": "Could not resolve exam selection."})
 
         # Get the exam code to return
         result = await db.execute(

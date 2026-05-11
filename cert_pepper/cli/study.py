@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import sys
+import termios
 import time
+import tty
 from datetime import datetime
 
 from rich.console import Console
@@ -14,6 +17,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from cert_pepper.db.connection import get_session
+from cert_pepper.db.exams import ExamChoice, match_exam_choices, resolve_cert_id, resolve_exam_selection
 from cert_pepper.engine import fsrs, selector
 from cert_pepper.engine.bkt import BKTParams
 from cert_pepper.engine.bkt import update as bkt_update
@@ -27,6 +31,126 @@ RATING_LABELS = {
     3: "[green]Good[/green]",
     4: "[blue]Easy[/blue]",
 }
+
+_CLI_EXAM_MENU_THRESHOLD = 8
+
+
+def _is_interactive_terminal() -> bool:
+    """Return whether the current CLI session can support interactive prompts."""
+    return sys.stdin.isatty() and sys.stdout.isatty()
+
+
+def _format_exam_choice(choice: ExamChoice) -> str:
+    """Format an exam choice for menu display."""
+    return f"{choice.code} - {choice.name}"
+
+
+def _read_single_key() -> str:
+    """Read one keypress, preserving arrow-key escape sequences."""
+    fd = sys.stdin.fileno()
+    old_settings = termios.tcgetattr(fd)
+    try:
+        tty.setraw(fd)
+        key = sys.stdin.read(1)
+        if key == "\x1b":
+            key += sys.stdin.read(2)
+        return key
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+
+
+def _read_menu_selection(options: list[str], title: str) -> int:
+    """Read a menu selection via arrow keys in TTY mode or numeric fallback otherwise."""
+    if not options:
+        raise ValueError("No options available for selection.")
+
+    if not _is_interactive_terminal():
+        console.print(f"\n[bold cyan]{title}[/bold cyan]")
+        for index, option in enumerate(options, start=1):
+            console.print(f"  {index}) {option}")
+        selection = Prompt.ask(
+            "Choose an option",
+            choices=[str(index) for index in range(1, len(options) + 1)],
+            default="1",
+        )
+        return int(selection) - 1
+
+    selected = 0
+    while True:
+        console.clear()
+        console.print(Panel(f"[bold cyan]{title}[/bold cyan]", border_style="cyan"))
+        console.print("[dim]Use arrow keys and press Enter.[/dim]\n")
+        for index, option in enumerate(options):
+            if index == selected:
+                console.print(f"> {option}", style="reverse")
+            else:
+                console.print(f"  {option}")
+
+        key = _read_single_key()
+        if key == "\x1b[A":
+            selected = (selected - 1) % len(options)
+        elif key == "\x1b[B":
+            selected = (selected + 1) % len(options)
+        elif key in ("\r", "\n"):
+            console.clear()
+            return selected
+        elif key == "\x03":
+            raise KeyboardInterrupt
+
+
+async def resolve_cli_exam_choice(
+    session: AsyncSession,
+    exam_code: str | None = None,
+    interactive: bool | None = None,
+    threshold: int = _CLI_EXAM_MENU_THRESHOLD,
+) -> int:
+    """Resolve a certification id for CLI flows, prompting when multiple exams exist."""
+    if exam_code is not None:
+        return await resolve_cert_id(session, exam_code)
+
+    selection = await resolve_exam_selection(session)
+    if selection.status == "resolved" and selection.cert_id is not None:
+        return selection.cert_id
+
+    options = selection.options
+    if interactive is None:
+        interactive = _is_interactive_terminal()
+
+    if not interactive:
+        available = ", ".join(choice.code for choice in options[:threshold])
+        suffix = "" if len(options) <= threshold else ", ..."
+        raise ValueError(
+            "Multiple exams found. Use --exam with one of: "
+            f"{available}{suffix}"
+        )
+
+    current_options = options
+    while True:
+        if len(current_options) == 1:
+            return current_options[0].id
+
+        if len(current_options) > threshold:
+            visible_options = current_options[: threshold - 1]
+            labels = [_format_exam_choice(choice) for choice in visible_options] + ["Other..."]
+            selected_index = _read_menu_selection(labels, "Choose an exam")
+            if selected_index == len(labels) - 1:
+                query = Prompt.ask("Type part of the exam code or name").strip()
+                if not query:
+                    console.print("[red]Enter at least one character to search.[/red]")
+                    continue
+                matches = await match_exam_choices(session, query)
+                if not matches:
+                    console.print(
+                        f"[red]No exams matched '{query}'. Try part of the code or name.[/red]"
+                    )
+                    continue
+                current_options = matches
+                continue
+            return visible_options[selected_index].id
+
+        labels = [_format_exam_choice(choice) for choice in current_options]
+        selected_index = _read_menu_selection(labels, "Choose an exam")
+        return current_options[selected_index].id
 
 
 async def get_default_user_id(session: AsyncSession) -> int:
@@ -258,9 +382,8 @@ async def run_study_session(
         user_id = await get_default_user_id(session)
 
         # Resolve certification
-        from cert_pepper.db.exams import resolve_cert_id
         try:
-            cert_id = await resolve_cert_id(session, exam_code)
+            cert_id = await resolve_cli_exam_choice(session, exam_code)
         except ValueError as e:
             console.print(f"[red]{e}[/red]")
             return

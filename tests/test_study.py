@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from cert_pepper.cli.study import run_study_session
+from cert_pepper.cli.study import resolve_cli_exam_choice, run_study_session
 
 
 class TestScreenClearBetweenQuestions:
@@ -76,3 +77,61 @@ class TestQuitMidQuestion:
         ):
             # Must complete without raising UnboundLocalError (or any other error)
             await run_study_session(count=3)
+
+
+class TestResolveCliExamChoice:
+    async def test_multiple_exams_non_interactive_raises_actionable_error(self, db):
+        from cert_pepper.db.connection import get_session
+        from tests.conftest import seed_certification
+
+        async with get_session() as session:
+            await seed_certification(session, "AWS-SAA", "AWS Solutions Architect")
+            await session.commit()
+
+        async with get_session() as session:
+            with pytest.raises(ValueError, match="Use --exam"):
+                await resolve_cli_exam_choice(session, exam_code=None, interactive=False)
+
+    async def test_interactive_menu_selects_exam_when_exam_count_within_threshold(self, db):
+        from cert_pepper.db.connection import get_session
+        from tests.conftest import get_cert_id, seed_certification
+
+        async with get_session() as session:
+            aws_id = await seed_certification(session, "AWS-SAA", "AWS Solutions Architect")
+            await session.commit()
+
+        async with get_session() as session:
+            with patch("cert_pepper.cli.study._read_menu_selection", return_value=0):
+                result = await resolve_cli_exam_choice(session, exam_code=None, interactive=True)
+
+        assert result == aws_id
+
+    async def test_large_interactive_menu_can_use_other_then_partial_match(self, db):
+        from cert_pepper.db.connection import get_session
+        from tests.conftest import seed_certification
+
+        codes = [
+            ("AWS-SAA", "AWS Solutions Architect"),
+            ("AWS-DEV", "AWS Developer Associate"),
+            ("AZ-104", "Azure Administrator"),
+            ("CISSP", "Certified Information Systems Security Professional"),
+            ("CCNA", "Cisco CCNA"),
+            ("AL-PERMIT", "Alabama Driver Permit Test"),
+            ("PMP", "Project Management Professional"),
+            ("SECPLUS", "CompTIA Security+"),
+        ]
+
+        async with get_session() as session:
+            cert_ids = {}
+            for code, name in codes:
+                cert_ids[code] = await seed_certification(session, code, name)
+            await session.commit()
+
+        async with get_session() as session:
+            with (
+                patch("cert_pepper.cli.study._read_menu_selection", return_value=7),
+                patch("cert_pepper.cli.study.Prompt.ask", side_effect=["alabama"]),
+            ):
+                result = await resolve_cli_exam_choice(session, exam_code=None, interactive=True)
+
+        assert result == cert_ids["AL-PERMIT"]

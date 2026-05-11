@@ -1,4 +1,4 @@
-"""Tests for cert_pepper/db/exams.py — resolve_cert_id and get_cert_id_for_session."""
+"""Tests for cert_pepper/db/exams.py — resolution helpers and session lookups."""
 
 from __future__ import annotations
 
@@ -6,7 +6,13 @@ import pytest
 from sqlalchemy import text
 
 from cert_pepper.db.connection import get_session
-from cert_pepper.db.exams import resolve_cert_id, get_cert_id_for_session
+from cert_pepper.db.exams import (
+    get_cert_id_for_session,
+    list_exam_choices,
+    match_exam_choices,
+    resolve_cert_id,
+    resolve_exam_selection,
+)
 
 from tests.conftest import seed_certification, seed_domains_for_cert, get_cert_id
 
@@ -61,7 +67,7 @@ class TestResolveCertId:
         _conn_module._engine = None
         _conn_module._session_factory = None
 
-        from cert_pepper.db.connection import get_engine, init_db
+        from cert_pepper.db.connection import get_engine
         engine = get_engine()
 
         # Create minimal schema without seeding any certifications
@@ -77,6 +83,90 @@ class TestResolveCertId:
         await engine.dispose()
         _conn_module._engine = None
         _conn_module._session_factory = None
+
+
+class TestResolveExamSelection:
+    async def test_auto_single_cert_returns_resolved_status(self, db):
+        async with get_session() as session:
+            cert_id = await get_cert_id(session, "SY0-701")
+            result = await resolve_exam_selection(session)
+
+        assert result.status == "resolved"
+        assert result.cert_id == cert_id
+        assert result.options == []
+
+    async def test_multiple_certs_returns_selection_required(self, db):
+        async with get_session() as session:
+            await seed_certification(session, "AWS-SAA", "AWS Solutions Architect")
+            await session.commit()
+
+        async with get_session() as session:
+            result = await resolve_exam_selection(session)
+
+        assert result.status == "selection_required"
+        assert result.cert_id is None
+        assert [option.code for option in result.options] == ["AWS-SAA", "SY0-701"]
+
+    async def test_explicit_code_returns_resolved_status(self, db):
+        async with get_session() as session:
+            cert_id = await get_cert_id(session, "SY0-701")
+            result = await resolve_exam_selection(session, "SY0-701")
+
+        assert result.status == "resolved"
+        assert result.cert_id == cert_id
+        assert result.options == []
+
+
+class TestListAndMatchExamChoices:
+    async def test_list_exam_choices_returns_sorted_code_and_name(self, db):
+        async with get_session() as session:
+            await seed_certification(session, "AWS-SAA", "AWS Solutions Architect")
+            await seed_certification(session, "AL-PERMIT", "Alabama Driver Permit Test")
+            await session.commit()
+
+        async with get_session() as session:
+            result = await list_exam_choices(session)
+
+        assert [(choice.code, choice.name) for choice in result] == [
+            ("AL-PERMIT", "Alabama Driver Permit Test"),
+            ("AWS-SAA", "AWS Solutions Architect"),
+            ("SY0-701", "CompTIA Security+"),
+        ]
+
+    async def test_match_exam_choices_matches_partial_code_case_insensitively(self, db):
+        async with get_session() as session:
+            await seed_certification(session, "AL-PERMIT", "Alabama Driver Permit Test")
+            await session.commit()
+
+        async with get_session() as session:
+            result = await match_exam_choices(session, "permit")
+
+        assert [(choice.code, choice.name) for choice in result] == [
+            ("AL-PERMIT", "Alabama Driver Permit Test"),
+        ]
+
+    async def test_match_exam_choices_matches_partial_name_case_insensitively(self, db):
+        async with get_session() as session:
+            await seed_certification(session, "AWS-SAA", "AWS Solutions Architect")
+            await session.commit()
+
+        async with get_session() as session:
+            result = await match_exam_choices(session, "architect")
+
+        assert [(choice.code, choice.name) for choice in result] == [
+            ("AWS-SAA", "AWS Solutions Architect"),
+        ]
+
+    async def test_match_exam_choices_returns_all_matches_for_ambiguous_query(self, db):
+        async with get_session() as session:
+            await seed_certification(session, "AWS-SAA", "AWS Solutions Architect")
+            await seed_certification(session, "AWS-DEV", "AWS Developer Associate")
+            await session.commit()
+
+        async with get_session() as session:
+            result = await match_exam_choices(session, "aws")
+
+        assert [choice.code for choice in result] == ["AWS-DEV", "AWS-SAA"]
 
 
 class TestGetCertIdForSession:

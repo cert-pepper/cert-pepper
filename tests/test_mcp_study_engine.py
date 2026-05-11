@@ -81,6 +81,35 @@ class TestStudySessionReconnect:
         assert result["question_id"] == unseen_question_id
 
 
+class TestStartSessionExamSelection:
+    async def test_start_session_returns_selection_required_when_multiple_exams_exist(self, db):
+        from cert_pepper.db.connection import get_session
+        from cert_pepper.mcp.study_engine import start_session
+        from tests.conftest import seed_certification
+
+        async with get_session() as session:
+            await seed_certification(session, "AWS-SAA", "AWS Solutions Architect")
+            await session.commit()
+
+        result = json.loads(await start_session(session_type="study"))
+
+        assert result["status"] == "selection_required"
+        assert "message" in result
+        assert result["options"] == [
+            {"code": "AWS-SAA", "name": "AWS Solutions Architect"},
+            {"code": "SY0-701", "name": "CompTIA Security+"},
+        ]
+
+    async def test_start_session_still_resolves_explicit_exam_code(self, db):
+        from cert_pepper.mcp.study_engine import start_session
+
+        result = json.loads(await start_session(session_type="study", exam_code="SY0-701"))
+
+        assert "error" not in result
+        assert result["exam_code"] == "SY0-701"
+        assert result["session_id"].startswith("sess_")
+
+
 class TestGetSessionWrongAnswers:
     async def test_returns_error_when_no_sessions(self, db):
         from cert_pepper.mcp.study_engine import get_session_wrong_answers
